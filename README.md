@@ -11,7 +11,7 @@ npm run build
 npm run dev -- dist
 ```
 
-Open http://127.0.0.1:4173. The workspace opens with the June retail demo selected.
+Open http://127.0.0.1:4173. Choose **Try the retail demo** on the landing page to open the June sample batch. It includes 251 rows and five prior months for comparison.
 
 ```sh
 npm test
@@ -25,6 +25,7 @@ npm run benchmark
 3. Publish once all pending decisions are resolved. Rows that still fail validation stay in quarantine. The accepted CSV is available after publishing.
 4. Export a replay bundle. Use **Batch history → Replay bundle** to verify that the archived decisions and versioned contract reproduce the same published result.
 5. In **Data contract**, save a new version to adjust date interpretation and drift thresholds for future imports. Existing batches retain their original contracts.
+6. Open **Analytics** to compare monthly net revenue, row disposition, revenue by category or region, missing values, and findings by rule.
 
 CSV and TSV imports accept the names in the application’s template and aliases listed in **Data contract**. An initial imported batch can establish a baseline after publication. Later imports compare required-field missingness and category distributions with the most recent published imported batch. Drift flags inform review without modifying rows.
 

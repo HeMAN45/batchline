@@ -1,4 +1,4 @@
-import { CONTRACT, FIELDS, REQUIRED, detectDrift, evaluate, loadBatch, monthlyRevenue, profile, sha256, validateContract } from './engine.js';
+import { CONTRACT, FIELDS, REQUIRED, detectDrift, evaluate, loadBatch, monthlyRevenue, profile, segmentRevenue, sha256, validateContract } from './engine.js';
 import { compare, demoBatches, demoText, HEADERS } from './demo.js';
 import { writeCsv } from './csv.js';
 import { publicBenchmark } from './benchmark-data.js';
@@ -33,22 +33,25 @@ const paths = {
   offline: '<path d="M3 9a14 14 0 0 1 18 0M6 13a9 9 0 0 1 12 0m-8 4a3 3 0 0 1 4 0m-2 4h.01"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   box: '<rect x="4" y="6" width="16" height="14" rx="2"/><path d="M8 6V4h8v2m-7 7h6"/>',
+  play: '<path d="m8 5 12 7-12 7V5Z"/>',
   undo: '<path d="M9 14 4 9l5-5M4 9h10a5 5 0 1 1 0 10h-3"/>'
 };
 const icon = (name, size = 18) => '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths[name] + '</svg>';
 
 let state;
-let view = location.hash.slice(1) || 'overview';
+let view = location.hash.slice(1) || 'home';
 let filter = 'all';
 let page = 0;
+let dimension = 'category';
 let busy = false;
 let storageReady = true;
 let offlineReady = false;
 let installPrompt;
 let model;
+let demoPreview;
 
 const pages = [
-  ['overview', 'grid', 'Overview'], ['batches', 'stack', 'Batch history'],
+  ['overview', 'grid', 'Overview'], ['analytics', 'chart', 'Analytics'], ['batches', 'stack', 'Batch history'],
   ['review', 'review', 'Review queue'], ['contract', 'contract', 'Data contract'],
   ['benchmark', 'chart', 'Benchmark']
 ];
@@ -133,7 +136,7 @@ function button(label, action, symbol, kind = 'secondary', extra = '') {
 
 function layout(body) {
   const { result } = model;
-  return '<aside class="rail"><a class="brand" href="#overview"><span class="brand-mark">' + icon('logo', 24) +
+  return '<aside class="rail"><a class="brand" href="#home" aria-label="Batchline home"><span class="brand-mark">' + icon('logo', 24) +
     '</span><span>Batchline<small>DATA QUALITY STUDIO</small></span></a>' +
     '<div class="navigation"><p class="nav-label">WORKSPACE</p><nav aria-label="Workspace">' +
     pages.map(([id, symbol, label]) => '<a href="#' + id + '" ' + (view === id ? 'aria-current="page"' : '') + '>' +
@@ -161,8 +164,37 @@ function card(title, subtitle, body, extra = '') {
     '</p></div>' + extra + '</header>' + body + '</section>';
 }
 
-function revenueChart() {
-  const { entry, batch, result } = model;
+function landing() {
+  if (!demoPreview) {
+    const entry = state.entries.find(item => item.id === 'demo-6');
+    const batch = loadBatch(entry.text);
+    demoPreview = { entry, batch, result: evaluate(batch, entry.contract) };
+  }
+  const { batch, result } = demoPreview;
+  return '<div class="landing"><header class="landing-header"><div class="landing-wrap">' +
+    '<a class="brand" href="#home"><span class="brand-mark">' + icon('logo', 24) + '</span><span>Batchline</span></a>' +
+    '<nav aria-label="Product"><a href="#benchmark">Benchmark</a>' +
+    '<a class="button secondary" href="#overview">Open workspace</a></nav></div></header>' +
+    '<main id="content" class="landing-wrap" tabindex="-1"><section class="landing-hero" aria-labelledby="landing-title">' +
+    '<div class="landing-copy"><h1 id="landing-title">Clean retail data.<br><em>Trust the totals.</em></h1>' +
+    '<p>Catch duplicates, inconsistent dates, and revenue errors before they reach your reports. Review each proposed fix and see what changes in your analytics.</p>' +
+    '<div class="actions">' + button('Try the retail demo', 'demo', 'play', 'primary') +
+    button('Upload your CSV', 'import', 'upload') + '</div>' +
+    '<p class="landing-hint">Includes six monthly batches. <button class="link-button" type="button" data-action="demo-csv">Download June sample CSV</button></p></div>' +
+    '<div class="landing-preview"><div class="preview-top"><span class="preview-icon">' + icon('chart', 19) +
+    '</span><div><strong>Net revenue</strong><small>Retail demo · Jan–Jun 2025</small></div>' +
+    '<span class="preview-total">' + money(result.publishedRevenue) + '<small>June accepted</small></span></div>' +
+    revenueChart(demoPreview) + '<div class="preview-footer"><span><strong>' + format(batch.records.length) +
+    '</strong> June source rows</span><span><strong>' + format(result.pending) + '</strong> repairs to review</span></div></div></section>' +
+    '<div class="landing-features"><article>' + icon('contract', 22) + '<h2>Validate each batch</h2>' +
+    '<p>Use a versioned contract to flag invalid records and spot changes from the previous batch.</p></article><article>' +
+    icon('review', 22) + '<h2>Review with evidence</h2><p>Compare source values with proposed repairs before exporting accepted rows.</p></article><article>' +
+    icon('chart', 22) + '<h2>Explore the impact</h2><p>Track net revenue, data quality, and quarantined rows together.</p></article></div></main>' +
+    '<footer class="landing-wrap landing-footer"><span>' + icon('offline', 17) + 'Works offline after the first load</span>' +
+    (installPrompt ? button('Install app', 'install', 'download') : '<span>Files stay on your device</span>') + '</footer></div>';
+}
+
+function revenueChart({ entry, batch, result } = model) {
   const prior = state.entries.filter(item => item.demo && item.publication && item.id !== entry.id);
   const series = prior.map(item => ({ id: item.id, month: item.createdAt.slice(0, 7), revenue: item.publication.revenue }));
   if (entry.demo) {
@@ -178,7 +210,9 @@ function revenueChart() {
   const bounds = maximum - minimum;
   const axisValue = value => '£' + (Math.abs(value) >= 1000 ? (value / 1000).toFixed(value % 1000 ? 1 : 0) + 'k' : Math.round(value));
   const lines = [maximum, minimum + bounds * 0.75, minimum + bounds * 0.5, minimum + bounds * 0.25, minimum];
-  const label = month => new Intl.DateTimeFormat('en-GB', { month: 'short', timeZone: 'UTC' }).format(new Date(month + '-01T00:00:00Z'));
+  const multiYear = new Set(series.map(item => item.month.slice(0, 4))).size > 1;
+  const monthFormat = new Intl.DateTimeFormat('en-GB', { month: 'short', year: multiYear ? '2-digit' : undefined, timeZone: 'UTC' });
+  const label = month => monthFormat.format(new Date(month + '-01T00:00:00Z'));
   return '<div class="chart" role="img" aria-label="' + esc(series.map(item => label(item.month) + ' ' + money(item.revenue)).join(', ')) +
     '"><div class="axis">' + lines.map(value => '<span>' + esc(axisValue(value)) + '</span>').join('') +
     '</div><div class="plot"><div class="gridlines"><i></i><i></i><i></i><i></i><i></i></div><div class="bars">' +
@@ -203,6 +237,66 @@ function breakdown() {
     result.checks[key] / max * 100 + '%"></i></div></div>').join('') + '</div>';
 }
 
+function rowDisposition() {
+  const { batch, result } = model;
+  const pending = new Set(result.findings.filter(item => item.status === 'pending').map(item => item.row));
+  const groups = [
+    ['Accepted', result.accepted.length, 'accepted'],
+    ['Awaiting review', pending.size, 'awaiting'],
+    ['Other quarantine', result.held.length - pending.size, 'quarantined']
+  ];
+  return '<div class="disposition"><div class="disposition-bar" aria-hidden="true">' +
+    groups.map(([, count, tone]) => '<span class="' + tone + '" style="flex:' + count + ' 0 0"></span>').join('') +
+    '</div><dl>' + groups.map(([label, count, tone]) => '<div><dt><i class="' + tone + '"></i>' + label +
+    '</dt><dd>' + format(count) + ' <small>' + percent(count / batch.records.length) + '</small></dd></div>').join('') + '</dl></div>';
+}
+
+function revenueSegments() {
+  const segments = segmentRevenue(model.batch, model.result, dimension);
+  if (!segments.length) return '<p class="empty">No accepted rows to break down.</p>';
+  const visible = segments.slice(0, 6);
+  const maximum = Math.max(1, ...visible.map(segment => Math.abs(segment.revenue)));
+  return '<div class="breakdown segment-chart">' + visible.map(({ name, revenue }) => '<div><div><span title="' +
+    esc(name) + '">' + esc(name) + '</span><strong>' + money(revenue) + '</strong></div>' +
+    '<div class="track" aria-hidden="true"><i class="' + (revenue < 0 ? 'negative' : '') +
+    '" style="width:' + Math.abs(revenue) / maximum * 100 + '%"></i></div></div>').join('') + '</div>';
+}
+
+function missingComparison() {
+  const { batch, result } = model;
+  if (!result.accepted.length) return '<p class="empty">Accept at least one row to compare completeness.</p>';
+  const before = profile(batch);
+  const after = profile({ ...batch, records: result.accepted.map(item => item.record) });
+  const rows = REQUIRED.map(key => ({
+    label: key === 'order_id' ? 'Order ID' : key[0].toUpperCase() + key.slice(1).replaceAll('_', ' '),
+    before: Math.round(before.missing[key] * before.size),
+    after: Math.round(after.missing[key] * after.size)
+  }));
+  const max = Math.max(1, ...rows.flatMap(row => [row.before, row.after]));
+  return '<div class="missing-chart"><div class="missing-legend"><span><i></i>Source</span><span><i></i>Accepted</span></div>' +
+    rows.map(row => '<div class="missing-row"><strong>' + row.label + '</strong><span class="missing-pair" aria-hidden="true">' +
+      '<i style="width:' + row.before / max * 100 + '%"></i><i style="width:' + row.after / max * 100 +
+      '%"></i></span><span aria-label="' + row.before + ' source, ' + row.after + ' accepted">' +
+      format(row.before) + ' / ' + format(row.after) + '</span></div>').join('') + '</div>';
+}
+
+function analytics() {
+  const { entry, batch, result } = model;
+  const selector = '<label class="segment-select"><span>Group by</span><select id="revenue-dimension">' +
+    '<option value="category"' + (dimension === 'category' ? ' selected' : '') + '>Category</option>' +
+    '<option value="region"' + (dimension === 'region' ? ' selected' : '') + '>Region</option></select></label>';
+  return heading('Batch analytics', esc(entry.name) + ' · ' + format(batch.records.length) + ' source rows',
+    '<a class="button secondary" href="#review">' + icon('review', 16) + 'Review findings</a>') +
+    '<div class="overview-grid">' +
+    card('Net revenue over time', entry.demo ? 'Monthly net revenue · retail demo' : 'Monthly net revenue · accepted rows', revenueChart()) +
+    card('Row disposition', 'Where source records stand in this run', rowDisposition()) + '</div>' +
+    '<div class="analytics-grid">' +
+    card('Revenue breakdown', 'Top six groups by absolute net revenue', revenueSegments(), selector) +
+    card('Missing required values', 'Counts in the source and accepted rows', missingComparison()) +
+    '</div>' + card('Quality findings by rule', 'Checks triggered in the active batch', breakdown(),
+      badge(format(result.findings.length) + ' findings', 'neutral'));
+}
+
 function historyTable(limit) {
   const entries = state.entries.slice().reverse();
   const rows = (limit ? entries.slice(0, limit) : entries).map(item => '<tr><td><button class="file-link" type="button" data-action="select" data-id="' +
@@ -215,7 +309,9 @@ function historyTable(limit) {
 
 function overview() {
   const { entry, batch, result, flags } = model;
-  return heading('Batch overview', 'Validate incoming retail files and track what reaches your reports.', button('Open review queue', 'review', 'review')) +
+  return heading('Batch overview', 'Validate incoming retail files and track what reaches your reports.',
+    '<a class="button secondary" href="#analytics">' + icon('chart', 16) + 'Open analytics</a>' +
+    button('Open review queue', 'review', 'review')) +
     '<section class="batch-banner"><div class="batch-symbol">' + icon('stack', 27) + '</div><div><p>' +
     (entry.demo ? 'RETAIL DEMO BATCH' : 'ACTIVE BATCH') + '</p><h2>' + esc(entry.name) + '</h2><div class="batch-meta">Retail orders <span>·</span> Contract v' +
     entry.contract.version + ' <span>·</span> ' + format(batch.records.length) + ' source rows</div></div><div class="banner-state">' +
@@ -237,7 +333,7 @@ function overview() {
 
 function batches() {
   return heading('Batch history', 'Inspect previous runs, import a new file, or replay a saved bundle.',
-    button('Replay bundle', 'replay', 'undo')) + card('Workspace batches', format(state.entries.length) + ' batches on this device', historyTable()) +
+    button('Try retail demo', 'demo', 'play') + button('Replay bundle', 'replay', 'undo')) + card('Workspace batches', format(state.entries.length) + ' batches on this device', historyTable()) +
     card('Import format', 'CSV and TSV with the retail order schema.', '<div class="card-body"><p>Required columns are order ID, date, category, region, quantity, and unit price. SKU and revenue are optional. Standard UCI Online Retail column names are also accepted.</p>' +
       button('Download CSV template', 'template', 'download') + '</div>');
 }
@@ -352,8 +448,8 @@ function benchmark() {
 }
 
 function render() {
-  if (!Object.hasOwn(titles, view)) view = 'overview';
-  root.innerHTML = layout({ overview, batches, review, contract, benchmark }[view]());
+  if (!Object.hasOwn(titles, view)) view = 'home';
+  root.innerHTML = view === 'home' ? landing() : layout({ overview, analytics, batches, review, contract, benchmark }[view]());
 }
 
 function navigate(destination) {
@@ -484,13 +580,14 @@ root.addEventListener('click', async event => {
   const { entry, result, batch } = model;
   const base = entry.name.replace(/\.[^.]*$/, '');
   if (action === 'import' || action === 'replay') document.querySelector(action === 'import' ? '#batch-file' : '#replay-file').click();
-  if (action === 'select' && !busy) {
-    state.selected = id;
+  if ((action === 'select' || action === 'demo') && !busy) {
+    state.selected = action === 'demo' ? 'demo-6' : id;
     filter = 'all';
     page = 0;
     await persist();
     refresh();
     navigate('overview');
+    if (action === 'demo') notice('Retail demo opened.');
   }
   if (action === 'review') navigate('review');
   if (action === 'confirm-publish') showPublishDialog();
@@ -515,6 +612,7 @@ root.addEventListener('click', async event => {
     notice(action === 'undo' ? 'Decision reverted.' : action === 'approve' ? 'Revenue correction approved.' : 'Row kept in quarantine.');
   }
   if (action === 'export' && entry.publication) download(base + '_accepted.csv', writeCsv([batch.headers, ...result.accepted.map(item => item.record)], { spreadsheetSafe: true }));
+  if (action === 'demo-csv') download(demoPreview.entry.name, demoPreview.entry.text);
   if (action === 'quarantine') download(base + '_quarantine.csv', writeCsv([
     ['source_record', 'reason', 'values_json'], ...result.held.map(item => [item.row, item.reason, JSON.stringify(item.record)])
   ], { spreadsheetSafe: true }));
@@ -553,6 +651,18 @@ root.addEventListener('submit', async event => {
   });
 });
 
+root.addEventListener('change', event => {
+  if (event.target.id !== 'revenue-dimension') return;
+  dimension = event.target.value;
+  render();
+  document.querySelector('#revenue-dimension').focus();
+});
+
+document.querySelector('.skip').addEventListener('click', event => {
+  event.preventDefault();
+  document.querySelector('#content')?.focus();
+});
+
 for (const [selector, operation] of [['#batch-file', ingest], ['#replay-file', replay]]) {
   document.querySelector(selector).addEventListener('change', event => {
     const file = event.target.files[0];
@@ -563,7 +673,7 @@ for (const [selector, operation] of [['#batch-file', ingest], ['#replay-file', r
 
 window.addEventListener('hashchange', () => {
   if (!model) return;
-  view = location.hash.slice(1) || 'overview';
+  view = location.hash.slice(1) || 'home';
   filter = 'all';
   page = 0;
   render();

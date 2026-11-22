@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { writeCsv, parseDelimited } from '../app/csv.js';
-import { CONTRACT, detectDrift, evaluate, loadBatch, monthlyRevenue, profile, sha256, validateContract } from '../app/engine.js';
+import { CONTRACT, detectDrift, evaluate, loadBatch, monthlyRevenue, profile, segmentRevenue, sha256, validateContract } from '../app/engine.js';
 import { compare, HEADERS } from '../app/demo.js';
 
 function retail(...rows) {
@@ -63,6 +63,21 @@ test('detects missingness and category drift against a locked baseline', () => {
   assert.deepEqual(detectDrift(changed, baseline, CONTRACT).map(item => item.name), ['Missing region', 'Category mix shifted']);
   assert.equal(detectDrift(changed, null, CONTRACT).length, 0);
   assert.throws(() => validateContract({ ...CONTRACT, categoryDrift: 2 }), /Invalid/);
+});
+
+test('segments accepted revenue, including cancellations, without mixing dimensions', () => {
+  const batch = retail(sale,
+    ['C610010', 'SKU-1', '2025-06-06', 'Homeware', 'France', '-1', '10.00', '-10.00'],
+    ['610011', 'SKU-2', '2025-06-06', '__proto__', 'France', '3', '10.00', '30.00'],
+    ['610012', 'SKU-2', '2025-06-06', 'Gifts', 'France', '1', '10.00', '450.00']
+  );
+  const result = evaluate(batch, CONTRACT);
+  assert.deepEqual(segmentRevenue(batch, result, 'category'), [
+    { name: '__proto__', revenue: 30 }, { name: 'Homeware', revenue: 10 }
+  ]);
+  assert.deepEqual(segmentRevenue(batch, result, 'region'), [
+    { name: 'France', revenue: 20 }, { name: 'United Kingdom', revenue: 20 }
+  ]);
 });
 
 test('writes spreadsheet-safe CSV and hashes an independent source snapshot', async () => {

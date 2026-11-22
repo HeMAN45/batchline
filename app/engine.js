@@ -207,18 +207,30 @@ export function evaluate(batch, contract, decisions = {}, mode = 'review') {
     inputRevenue: money(inputRevenue), publishedRevenue: money(publishedRevenue) };
 }
 
-export function monthlyRevenue(batch, result) {
-  const totals = {};
+function revenueBy(batch, result, group) {
+  const totals = new Map();
   const { columns } = batch;
   for (const { record } of result.accepted) {
-    const month = record[columns.date]?.slice(0, 7);
-    if (!/^\d{4}-\d{2}$/.test(month)) continue;
+    const label = group(record);
+    if (!label) continue;
     const quantity = numeric(record[columns.quantity]?.trim());
     const price = numeric(record[columns.unit_price]?.trim());
     const revenue = columns.revenue < 0 ? money(quantity * price) : numeric(record[columns.revenue]?.trim());
-    totals[month] = (totals[month] ?? 0) + (revenue ?? 0);
+    totals.set(label, (totals.get(label) ?? 0) + (revenue ?? 0));
   }
-  return Object.entries(totals).sort(([left], [right]) => left.localeCompare(right)).map(([month, revenue]) => ({ month, revenue: money(revenue) }));
+  return Array.from(totals, ([name, revenue]) => ({ name, revenue: money(revenue) }));
+}
+
+export function monthlyRevenue(batch, result) {
+  return revenueBy(batch, result, record => {
+    const month = record[batch.columns.date]?.slice(0, 7);
+    return /^\d{4}-\d{2}$/.test(month) ? month : null;
+  }).sort((left, right) => left.name.localeCompare(right.name)).map(({ name, revenue }) => ({ month: name, revenue }));
+}
+
+export function segmentRevenue(batch, result, field) {
+  return revenueBy(batch, result, record => record[batch.columns[field]]?.trim())
+    .sort((left, right) => Math.abs(right.revenue) - Math.abs(left.revenue) || left.name.localeCompare(right.name));
 }
 
 export async function sha256(text) {
