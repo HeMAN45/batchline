@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Batchline · Retail Data Quality",
   "short_name": "Batchline",
-  "description": "An offline workspace to validate, review, and publish retail batches.",
+  "description": "An offline workspace to clean retail data, analyze rupee sales, and forecast seasonal demand.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

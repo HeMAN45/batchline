@@ -248,6 +248,9 @@ dialog .actions { justify-content: flex-end; }
 .missing-pair { display: grid; gap: 2px; background: #f1f4f2; border-radius: 3px; overflow: hidden; }
 .missing-pair i { height: 4px; background: #c78d33; }
 .missing-pair i + i { background: #327861; }
+.rail { overflow-y: auto; }
+.forecast-form [hidden] { display: none; }
+.forecast-bars { padding-top: 6px; }
 @media (max-width: 900px) {
   .landing-wrap { width: min(100% - 36px, 670px); }
   .landing-hero { grid-template-columns: 1fr; gap: 29px; }

@@ -2,7 +2,8 @@ const CACHE_PREFIX = 'batchline-shell-';
 const CACHE = CACHE_PREFIX + '__BUILD_REVISION__';
 const SHELL = [
   '/', '/manifest.webmanifest', '/app/icon-192.png', '/app/icon-512.png', '/app/style.css',
-  '/app/main.js', '/app/benchmark-data.js', '/app/csv.js', '/app/engine.js', '/app/demo.js', '/app/store.js'
+  '/app/main.js', '/app/benchmark-data.js', '/app/csv.js', '/app/engine.js', '/app/demo.js',
+  '/app/forecast.js', '/app/retail-demo.js', '/app/store.js'
 ];
 const assets = new Set(SHELL.slice(1));
 

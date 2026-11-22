@@ -1,5 +1,7 @@
-import { CONTRACT, FIELDS, REQUIRED, detectDrift, evaluate, loadBatch, monthlyRevenue, profile, segmentRevenue, sha256, validateContract } from './engine.js';
-import { compare, demoBatches, demoText, HEADERS } from './demo.js';
+import { CONTRACT, INR_CONTRACT, FIELDS, REQUIRED, detectDrift, evaluate, loadBatch, monthlyRevenue, profile, rowRevenue, segmentRevenue, sha256, validateContract } from './engine.js';
+import { compare } from './demo.js';
+import { buildDemandHistory, FESTIVALS, forecastDemand } from './forecast.js';
+import { DEMO_ID, indianDemo, RETAIL_HEADERS } from './retail-demo.js';
 import { writeCsv } from './csv.js';
 import { publicBenchmark } from './benchmark-data.js';
 import { loadWorkspace, saveWorkspace } from './store.js';
@@ -9,11 +11,13 @@ const announcer = document.querySelector('#announcer');
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
 ));
-const integer = new Intl.NumberFormat('en-GB');
-const currency = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 2, minimumFractionDigits: 2 });
+const integer = new Intl.NumberFormat('en-IN');
+const currencyFormatter = (locale, currency, options = {}) => new Intl.NumberFormat(locale, { style: 'currency', currency, ...options });
+const rupee = currencyFormatter('en-IN', 'INR');
+const sterling = currencyFormatter('en-GB', 'GBP');
 const format = value => integer.format(value);
 const percent = value => (value * 100).toFixed(0) + '%';
-const money = value => currency.format(value);
+const money = (value, schema = model?.entry.contract.schema ?? 2) => (schema === 1 ? sterling : rupee).format(value);
 const dateLabel = iso => new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(iso));
 const MAX_SIZE = 45 * 1024 * 1024;
 const PAGE_SIZE = 12;
@@ -49,9 +53,13 @@ let offlineReady = false;
 let installPrompt;
 let model;
 let demoPreview;
+let historyCache;
+let forecastOptions = { mode: 'festival', festival: 'diwali', year: 2027, week: 44 };
+let cleanPage = 0;
 
 const pages = [
-  ['overview', 'grid', 'Overview'], ['analytics', 'chart', 'Analytics'], ['batches', 'stack', 'Batch history'],
+  ['overview', 'grid', 'Overview'], ['output', 'rows', 'Clean output'], ['forecast', 'chart', 'Demand forecast'],
+  ['analytics', 'chart', 'Analytics'], ['batches', 'stack', 'Batch history'],
   ['review', 'review', 'Review queue'], ['contract', 'contract', 'Data contract'],
   ['benchmark', 'chart', 'Benchmark']
 ];
@@ -85,25 +93,25 @@ async function artifact(entry, result) {
   }));
 }
 
-async function seed() {
-  const entries = [];
-  for (const [index, sample] of demoBatches().entries()) {
-    const text = demoText(sample);
+async function addIndianDemo(workspace) {
+  let last = null;
+  for (const { id, name, date, text } of indianDemo()) {
     const parsed = loadBatch(text);
-    const last = entries.at(-1);
     const entry = {
-      id: 'demo-' + (index + 1), name: sample.name, text, hash: await sha256(text), contract: { ...CONTRACT },
-      createdAt: '2025-0' + (index + 1) + '-28T10:00:00.000Z', decisions: {}, demo: true,
+      id, name, text, hash: await sha256(text), contract: { ...INR_CONTRACT },
+      createdAt: date + 'T10:00:00.000Z', decisions: {}, demo: true,
       baseline: last ? profile(loadBatch(last.text)) : null, baselineHash: last?.hash ?? null
     };
-    if (index < 5) {
+    if (id !== DEMO_ID) {
       const result = evaluate(parsed, entry.contract);
       entry.publication = { at: entry.createdAt, fingerprint: await artifact(entry, result),
-        rows: result.accepted.length, revenue: result.publishedRevenue };
+        rows: result.accepted.length, revenue: result.publishedRevenue, months: monthlyRevenue(parsed, result) };
     }
-    entries.push(entry);
+    workspace.entries.push(entry);
+    last = entry;
   }
-  return { schema: 1, entries, selected: entries.at(-1).id, contract: { ...CONTRACT } };
+  if (!workspace.selected || workspace.entries.find(entry => entry.id === workspace.selected)?.demo) workspace.selected = DEMO_ID;
+  workspace.contract = { ...workspace.contract, schema: INR_CONTRACT.schema };
 }
 
 function current() {
@@ -166,7 +174,7 @@ function card(title, subtitle, body, extra = '') {
 
 function landing() {
   if (!demoPreview) {
-    const entry = state.entries.find(item => item.id === 'demo-6');
+    const entry = state.entries.find(item => item.id === DEMO_ID);
     const batch = loadBatch(entry.text);
     demoPreview = { entry, batch, result: evaluate(batch, entry.contract) };
   }
@@ -176,51 +184,50 @@ function landing() {
     '<nav aria-label="Product"><a href="#benchmark">Benchmark</a>' +
     '<a class="button secondary" href="#overview">Open workspace</a></nav></div></header>' +
     '<main id="content" class="landing-wrap" tabindex="-1"><section class="landing-hero" aria-labelledby="landing-title">' +
-    '<div class="landing-copy"><h1 id="landing-title">Clean retail data.<br><em>Trust the totals.</em></h1>' +
-    '<p>Catch duplicates, inconsistent dates, and revenue errors before they reach your reports. Review each proposed fix and see what changes in your analytics.</p>' +
+    '<div class="landing-copy"><h1 id="landing-title">Clean retail data.<br><em>Plan what sells next.</em></h1>' +
+    '<p>Turn messy sales files into clean data and revenue reports in rupees. Use past sales to estimate demand for a festival or a specific week.</p>' +
     '<div class="actions">' + button('Try the retail demo', 'demo', 'play', 'primary') +
     button('Upload your CSV', 'import', 'upload') + '</div>' +
-    '<p class="landing-hint">Includes six monthly batches. <button class="link-button" type="button" data-action="demo-csv">Download June sample CSV</button></p></div>' +
+    '<p class="landing-hint">Includes three years of synthetic Indian retail data. <button class="link-button" type="button" data-action="demo-csv">Download sample CSV</button></p></div>' +
     '<div class="landing-preview"><div class="preview-top"><span class="preview-icon">' + icon('chart', 19) +
-    '</span><div><strong>Net revenue</strong><small>Retail demo · Jan–Jun 2025</small></div>' +
-    '<span class="preview-total">' + money(result.publishedRevenue) + '<small>June accepted</small></span></div>' +
+    '</span><div><strong>Net revenue</strong><small>Retail demo · latest six months</small></div>' +
+    '<span class="preview-total">' + money(result.publishedRevenue, 2) + '<small>2026 accepted</small></span></div>' +
     revenueChart(demoPreview) + '<div class="preview-footer"><span><strong>' + format(batch.records.length) +
-    '</strong> June source rows</span><span><strong>' + format(result.pending) + '</strong> repairs to review</span></div></div></section>' +
+    '</strong> 2026 source rows</span><span><strong>' + format(result.pending) + '</strong> repairs to review</span></div></div></section>' +
     '<div class="landing-features"><article>' + icon('contract', 22) + '<h2>Validate each batch</h2>' +
     '<p>Use a versioned contract to flag invalid records and spot changes from the previous batch.</p></article><article>' +
     icon('review', 22) + '<h2>Review with evidence</h2><p>Compare source values with proposed repairs before exporting accepted rows.</p></article><article>' +
-    icon('chart', 22) + '<h2>Explore the impact</h2><p>Track net revenue, data quality, and quarantined rows together.</p></article></div></main>' +
+    icon('chart', 22) + '<h2>Estimate seasonal demand</h2><p>Compare past festivals or matching calendar weeks to see which products may sell most.</p></article></div></main>' +
     '<footer class="landing-wrap landing-footer"><span>' + icon('offline', 17) + 'Works offline after the first load</span>' +
     (installPrompt ? button('Install app', 'install', 'download') : '<span>Files stay on your device</span>') + '</footer></div>';
 }
 
 function revenueChart({ entry, batch, result } = model) {
-  const prior = state.entries.filter(item => item.demo && item.publication && item.id !== entry.id);
-  const series = prior.map(item => ({ id: item.id, month: item.createdAt.slice(0, 7), revenue: item.publication.revenue }));
-  if (entry.demo) {
-    const active = monthlyRevenue(batch, result).at(-1);
-    if (active) series.push({ ...active, id: entry.id });
-    series.sort((left, right) => left.month.localeCompare(right.month));
-  } else {
-    series.splice(0, series.length, ...monthlyRevenue(batch, result).slice(-6));
-  }
+  const prior = entry.demo ? state.entries.filter(item => item.demo && item.publication &&
+    item.contract.schema === entry.contract.schema && item.createdAt < entry.createdAt) : [];
+  const series = [
+    ...prior.flatMap(item => item.publication.months ??
+      [{ month: item.createdAt.slice(0, 7), revenue: item.publication.revenue }]),
+    ...monthlyRevenue(batch, result).map(month => ({ ...month, id: entry.id }))
+  ].sort((left, right) => left.month.localeCompare(right.month)).slice(-6);
   if (!series.length) return '<p class="empty">No accepted rows with valid dates are available for this batch.</p>';
   const maximum = Math.max(1, ...series.map(item => item.revenue));
   const minimum = Math.min(0, ...series.map(item => item.revenue));
   const bounds = maximum - minimum;
-  const axisValue = value => '£' + (Math.abs(value) >= 1000 ? (value / 1000).toFixed(value % 1000 ? 1 : 0) + 'k' : Math.round(value));
+  const compact = entry.contract.schema === 1 ? currencyFormatter('en-GB', 'GBP', { notation: 'compact' }) :
+    currencyFormatter('en-IN', 'INR', { notation: 'compact', maximumFractionDigits: 1 });
   const lines = [maximum, minimum + bounds * 0.75, minimum + bounds * 0.5, minimum + bounds * 0.25, minimum];
   const multiYear = new Set(series.map(item => item.month.slice(0, 4))).size > 1;
   const monthFormat = new Intl.DateTimeFormat('en-GB', { month: 'short', year: multiYear ? '2-digit' : undefined, timeZone: 'UTC' });
   const label = month => monthFormat.format(new Date(month + '-01T00:00:00Z'));
-  return '<div class="chart" role="img" aria-label="' + esc(series.map(item => label(item.month) + ' ' + money(item.revenue)).join(', ')) +
-    '"><div class="axis">' + lines.map(value => '<span>' + esc(axisValue(value)) + '</span>').join('') +
+  return '<div class="chart" role="img" aria-label="' + esc(series.map(item => label(item.month) + ' ' + money(item.revenue, entry.contract.schema)).join(', ')) +
+    '"><div class="axis">' + lines.map(value => '<span>' + esc(compact.format(value)) + '</span>').join('') +
     '</div><div class="plot"><div class="gridlines"><i></i><i></i><i></i><i></i><i></i></div><div class="bars">' +
     series.map(item => {
       const bottom = (Math.min(item.revenue, 0) - minimum) / bounds * 100;
       const height = Math.abs(item.revenue) / bounds * 100;
       return '<div class="bar-cell"><div class="bar-track"><div class="bar ' + (item.id === entry.id || !entry.demo ? 'active' : '') +
-        '" style="--height:' + height + '%;--bottom:' + bottom + '%" title="' + esc(money(item.revenue)) +
+        '" style="--height:' + height + '%;--bottom:' + bottom + '%" title="' + esc(money(item.revenue, entry.contract.schema)) +
         '"></div></div><span>' + label(item.month) + '</span></div>';
     }).join('') + '</div></div></div>';
 }
@@ -228,7 +235,8 @@ function revenueChart({ entry, batch, result } = model) {
 function breakdown() {
   const { result } = model;
   const labels = { date: 'Date format', revenue: 'Revenue mismatch', duplicate: 'Duplicate transaction',
-    required: 'Missing values', sign: 'Unverified negatives', shape: 'Uneven rows', measure: 'Invalid measures' };
+    required: 'Missing values', sign: 'Unverified negatives', shape: 'Uneven rows', measure: 'Invalid measures',
+    currency: 'Rupee formatting' };
   const entries = Object.entries(labels).filter(([key]) => result.checks[key] > 0).sort(([first], [second]) => result.checks[second] - result.checks[first]);
   if (!entries.length) return '<p class="empty">No row-level findings.</p>';
   const max = Math.max(...entries.map(([key]) => result.checks[key]));
@@ -307,14 +315,123 @@ function historyTable(limit) {
     rows + '</tbody></table></div>';
 }
 
+function cleanHeaders(batch) {
+  return batch.columns.revenue < 0 ? [...batch.headers, 'revenue'] : batch.headers;
+}
+
+function cleanRecord(batch, record) {
+  return batch.columns.revenue < 0 ? [...record, rowRevenue(batch, record)] : record;
+}
+
+function cleanOutput() {
+  const { entry, batch, result } = model;
+  const totalPages = Math.max(1, Math.ceil(result.accepted.length / PAGE_SIZE));
+  cleanPage = Math.min(cleanPage, totalPages - 1);
+  const columns = cleanHeaders(batch);
+  const revenueColumn = batch.columns.revenue < 0 ? columns.length - 1 : batch.columns.revenue;
+  const displayValue = (value, index) => index === revenueColumn || index === batch.columns.unit_price ?
+    money(Number(value)) : value;
+  const rows = result.accepted.slice(cleanPage * PAGE_SIZE, (cleanPage + 1) * PAGE_SIZE);
+  const preview = rows.length ? '<div class="table-scroll"><table><thead><tr>' +
+    columns.map(column => '<th scope="col">' + esc(column) + '</th>').join('') + '</tr></thead><tbody>' +
+    rows.map(({ record }) => '<tr>' + cleanRecord(batch, record).map((value, index) =>
+      '<td>' + esc(displayValue(value, index)) + '</td>').join('') + '</tr>').join('') +
+    '</tbody></table></div>' : '<p class="empty">No rows have passed validation for this batch.</p>';
+  const pagination = totalPages > 1 ? '<div class="pagination"><span>Page ' + (cleanPage + 1) + ' of ' + totalPages +
+    '</span><div>' + button('Previous', 'clean-prev', null, 'secondary small', cleanPage ? '' : 'disabled') +
+    button('Next', 'clean-next', null, 'secondary small', cleanPage + 1 < totalPages ? '' : 'disabled') + '</div></div>' : '';
+  return heading('Clean output', esc(entry.name) + ' · ' + (entry.contract.schema === 2 ? 'INR' : 'GBP') + ' · ' +
+    (entry.publication ? 'Published snapshot' : 'Draft from accepted rows'),
+    button('Download clean CSV', 'clean-export', 'download', 'primary', rows.length ? '' : 'disabled')) +
+    '<div class="metrics">' + metric('Source rows', format(batch.records.length), 'Records in the file', 'rows') +
+    metric('Clean rows', format(result.accepted.length), 'Included in the output CSV', 'check', 'mint') +
+    metric('Quarantined', format(result.held.length), format(result.pending) + ' pending repairs', 'review', 'amber') +
+    metric('Accepted net revenue', money(result.publishedRevenue), 'Includes verified cancellations', 'chart', 'mint') + '</div>' +
+    card('Clean data preview', 'The CSV includes all accepted rows. Unresolved entries stay in quarantine.', preview + pagination,
+      '<a class="text-link" href="#forecast">View demand forecast</a>');
+}
+
+function forecastHistory() {
+  if (historyCache?.model === model) return historyCache.data;
+  const { entry } = model;
+  const history = state.entries.filter(item => item.id !== entry.id && item.publication &&
+    Boolean(item.demo) === Boolean(entry.demo) && item.contract.schema === entry.contract.schema);
+  const sources = [model, ...history.map(item => {
+    const batch = loadBatch(item.text);
+    return { batch, result: evaluate(batch, item.contract, item.decisions) };
+  })];
+  const data = buildDemandHistory(sources);
+  historyCache = { model, data };
+  return data;
+}
+
+function forecastControls() {
+  const byWeek = forecastOptions.mode === 'week';
+  return '<form id="forecast-form" class="contract-form forecast-form"><label>Compare by<select name="mode">' +
+    '<option value="festival">Festival</option><option value="week"' + (byWeek ? ' selected' : '') + '>ISO week</option></select></label>' +
+    '<label data-period="festival"' + (byWeek ? ' hidden' : '') + '>Festival<select name="festival"' + (byWeek ? ' disabled' : '') + '>' +
+    Object.entries(FESTIVALS).map(([key, item]) => '<option value="' + key + '"' +
+      (key === forecastOptions.festival ? ' selected' : '') + '>' + item.name + '</option>').join('') +
+    '</select></label><label data-period="week"' + (byWeek ? '' : ' hidden') + '>ISO week<input name="week" type="number" min="1" max="53" step="1" required value="' +
+    forecastOptions.week + '"' + (byWeek ? '' : ' disabled') + '></label>' +
+    '<label>Target year<input name="year" type="number" min="1901" max="2099" step="1" required value="' + forecastOptions.year + '"></label>' +
+    '<button class="button primary" type="submit">' + icon('chart', 16) + 'Run forecast</button></form>';
+}
+
+function forecastWindowLabel(period) {
+  return dateLabel(period.dates[0]) + ' – ' + dateLabel(period.dates.at(-1));
+}
+
+function forecastPage() {
+  const history = forecastHistory();
+  const { target, periods, ranking, backtest, method } = forecastDemand(history, forecastOptions);
+  const hasForecast = ranking.length > 0;
+  const historyLabel = history.firstDate ? format(history.rowCount) + ' accepted records from ' +
+    dateLabel(history.firstDate) + ' to ' + dateLabel(history.lastDate) : 'No accepted records available';
+  const headingHtml = heading('Demand forecast', (model.entry.demo ? 'Synthetic retail demo · ' : 'Imported retail records · ') + historyLabel,
+    button('Download forecast CSV', 'forecast-export', 'download', 'primary', hasForecast ? '' : 'disabled'));
+  const config = card('Choose a sales period', 'Festival windows include the festival and six days before it. ISO weeks run Monday to Sunday.',
+    forecastControls() + '<div class="benchmark-note">Festival dates use Indian government calendars for 2024–2027. Imported forecasts combine the current accepted rows with published batches in the same currency. Use files from the same retailer.</div>',
+    model.entry.demo && model.entry.contract.schema === 2 ? button('Download demo history', 'demo-history', 'download', 'secondary small') : '');
+  if (!target) {
+    const message = forecastOptions.mode === 'festival' ? 'Select a festival year from 2024 through 2027.' :
+      'That ISO week does not exist in the chosen year. Select another week.';
+    return headingHtml + config + card('Period unavailable', message, '');
+  }
+  const shortfall = !periods.length ? 'Include historical sales for the same festival or ISO week. Each comparison needs records on at least five days.' :
+    'Matching periods contain no eligible positive sales.';
+  if (!hasForecast) return headingHtml + config + card(esc(target.label), forecastWindowLabel(target), '<p class="empty">' + shortfall + '</p>');
+  const maximum = ranking[0].estimate;
+  const bars = '<div class="breakdown segment-chart forecast-bars">' + ranking.slice(0, 6).map(item => '<div><div><span title="' +
+    esc(item.label) + '">' + esc(item.label) + '</span><strong>' + format(item.estimate) + ' units</strong></div>' +
+    '<div class="track" aria-hidden="true"><i style="width:' + item.estimate / maximum * 100 + '%"></i></div></div>').join('') + '</div>';
+  const rows = ranking.map(item => '<tr><td><strong>' + esc(item.label) + '</strong><small>' + esc(item.sku || 'Category total') +
+    '</small></td><td>' + esc(item.category) + '</td><td><strong>' + format(item.estimate) + '</strong></td><td>' +
+    format(item.low) + '–' + format(item.high) + '</td></tr>').join('');
+  const periodList = '<dl class="policies">' + periods.map(period => '<div><dt>' + esc(period.label) + '</dt><dd>' +
+    forecastWindowLabel(period) + ' · ' + period.reportingDays + ' of 7 days recorded</dd></div>').join('') + '</dl>';
+  const heldOut = backtest ? '<div class="benchmark-note">Holdout check on ' + esc(backtest.label) + ' · Weighted forecast error ' +
+    percent(backtest.modelError) + ' · Previous-year baseline ' + percent(backtest.previousError) +
+    '. Error is total absolute unit error divided by actual units.</div>' : '';
+  const note = periods.length === 1 ? ' Limited history: the estimate uses one comparable period.' : '';
+  const methodLabel = method === 'latest' ? 'Uses the latest comparable period.' : 'Uses a weighted average of comparable periods.';
+  return headingHtml + config + '<div class="overview-grid">' +
+    card('Top forecast products and categories', esc(target.label) + ' · ' + forecastWindowLabel(target), bars) +
+    card('Historical periods used', methodLabel + note, periodList + heldOut) +
+    '</div>' + card('Demand estimates', 'Positive units from accepted sales. Cancellations are excluded. The range shows observed historical totals.',
+      '<div class="table-scroll"><table><thead><tr><th>Product or group</th><th>Category</th><th>Estimated units</th><th>Historical range</th></tr></thead><tbody>' +
+      rows + '</tbody></table></div>');
+}
+
 function overview() {
   const { entry, batch, result, flags } = model;
-  return heading('Batch overview', 'Validate incoming retail files and track what reaches your reports.',
-    '<a class="button secondary" href="#analytics">' + icon('chart', 16) + 'Open analytics</a>' +
-    button('Open review queue', 'review', 'review')) +
+  return heading('Batch overview', 'Clean retail sales and use historical demand to plan festival and weekly stock.',
+    '<a class="button secondary" href="#output">' + icon('rows', 16) + 'Clean output</a>' +
+    '<a class="button primary" href="#forecast">' + icon('chart', 16) + 'Demand forecast</a>') +
     '<section class="batch-banner"><div class="batch-symbol">' + icon('stack', 27) + '</div><div><p>' +
     (entry.demo ? 'RETAIL DEMO BATCH' : 'ACTIVE BATCH') + '</p><h2>' + esc(entry.name) + '</h2><div class="batch-meta">Retail orders <span>·</span> Contract v' +
-    entry.contract.version + ' <span>·</span> ' + format(batch.records.length) + ' source rows</div></div><div class="banner-state">' +
+    entry.contract.version + ' <span>·</span> ' + (entry.contract.schema === 2 ? 'INR' : 'GBP') + ' <span>·</span> ' +
+    format(batch.records.length) + ' source rows</div></div><div class="banner-state">' +
     status(entry, result) + '</div></section>' +
     (batch.errors.length ? '<div class="callout error">' + icon('alert') + '<div><strong>Schema check failed</strong><p>' + batch.errors.map(esc).join(' ') + '</p></div></div>' : '') +
     '<div class="metrics">' + metric('Source rows', format(batch.records.length), 'Records in the input file', 'rows') +
@@ -334,7 +451,7 @@ function overview() {
 function batches() {
   return heading('Batch history', 'Inspect previous runs, import a new file, or replay a saved bundle.',
     button('Try retail demo', 'demo', 'play') + button('Replay bundle', 'replay', 'undo')) + card('Workspace batches', format(state.entries.length) + ' batches on this device', historyTable()) +
-    card('Import format', 'CSV and TSV with the retail order schema.', '<div class="card-body"><p>Required columns are order ID, date, category, region, quantity, and unit price. SKU and revenue are optional. Standard UCI Online Retail column names are also accepted.</p>' +
+    card('Import format', 'Retail sales CSV or TSV in Indian rupees.', '<div class="card-body"><p>Required columns are order ID, date, category, region, quantity, and unit price. Add SKU and product name to forecast individual products. Revenue is optional and is derived from quantity and unit price when absent.</p>' +
       button('Download CSV template', 'template', 'download') + '</div>');
 }
 function findingRows(findings) {
@@ -362,8 +479,9 @@ function review() {
   );
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
   page = Math.min(page, totalPages - 1);
-  const actions = entry.publication ? button('Download accepted CSV', 'export', 'download', 'primary') :
+  const releaseAction = entry.publication ? button('Download accepted CSV', 'export', 'download', 'primary') :
     button('Publish batch', 'confirm-publish', 'check', 'primary', result.pending || !result.accepted.length || batch.errors.length ? 'disabled' : '');
+  const actions = '<a class="button secondary" href="#output">' + icon('rows', 16) + 'Clean output</a>' + releaseAction;
   const description = entry.publication ? 'Published ' + dateLabel(entry.publication.at) + ' · ' + format(entry.publication.rows) + ' accepted rows.' :
     result.pending ? 'Resolve pending repairs to enable publishing.' : 'Publishing saves a reproducible snapshot of this run.';
   const controls = '<div class="tabs" aria-label="Filter findings">' + Object.entries(counts).map(([key, count]) =>
@@ -398,7 +516,7 @@ function contract() {
       config.categoryDrift * 100 + '"></label><button class="button primary" type="submit">' + icon('check', 16) + 'Save new version</button></form>',
       badge('Version ' + config.version, 'neutral')) +
     card('Schema mapping', 'Incoming headers are matched to these retail fields.', '<div class="table-scroll"><table><thead><tr><th>Field</th><th>Presence</th><th>Accepted aliases</th></tr></thead><tbody>' + fields + '</tbody></table></div>') +
-    card('Validation policy', 'Applied to every imported batch.', '<dl class="policies"><div><dt>Returns and cancellations</dt><dd>Retain negative quantities when the invoice ID starts with C followed by digits.</dd></div><div><dt>Reconciliation</dt><dd>Flag totals more than £0.01 away from quantity × unit price. A reviewer must approve the proposed total.</dd></div><div><dt>Duplicates and invalid records</dt><dd>Quarantine duplicate rows, missing required fields, unsupported dates, and invalid measures.</dd></div></dl>');
+    card('Validation policy', 'Applied to every imported batch.', '<dl class="policies"><div><dt>Returns and cancellations</dt><dd>Retain negative quantities when the invoice ID starts with C followed by digits.</dd></div><div><dt>Reconciliation</dt><dd>Flag totals more than ₹0.01 away from quantity × unit price. A reviewer must approve the proposed total.</dd></div><div><dt>Duplicates and invalid records</dt><dd>Quarantine duplicate rows, missing required fields, unsupported dates, and invalid measures.</dd></div></dl>');
 }
 
 function heldOutBenchmark() {
@@ -421,23 +539,23 @@ function heldOutBenchmark() {
     }, { detected: 0, recovered: 0, falseEdits: 0, held: 0, pending: 0, revenueError: 0 });
     return '<tr><td><strong>' + esc(name) + '</strong></td><td>' + percent(total.detected / corruptions) +
       '</td><td>' + percent(total.recovered / corruptions) + '</td><td>' + format(total.falseEdits) + '</td><td>' +
-      format(total.held) + '</td><td>' + format(total.pending) + '</td><td>' + money(total.revenueError) + '</td></tr>';
+      format(total.held) + '</td><td>' + format(total.pending) + '</td><td>' + money(total.revenueError, 1) + '</td></tr>';
   }).join('');
   return card('Held-out retail evaluation', format(inputs) + ' reference rows · ' + format(corruptions) +
     ' injected errors · ' + esc(months[0].month + ' to ' + months.at(-1).month) + ' · ' + dataset,
     '<div class="table-scroll"><table><thead><tr><th>Policy</th><th>Recall</th><th>Recovery</th><th>Non-injected edits</th>' +
     '<th>Quarantined</th><th>Pending</th><th>Total monthly error</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    '<div class="benchmark-note">Total monthly error sums absolute revenue differences across the three months. The original studio uses its defaults before manual review.</div>',
+    '<div class="benchmark-note">Revenue error is shown in the source dataset’s GBP. Total monthly error sums absolute revenue differences across the three months.</div>',
     button('Download study data', 'study-export', 'download', 'secondary small'));
 }
 
 function benchmark() {
   const rows = compare(CONTRACT).map(item => '<tr><td><strong>' + esc(item.name) + '</strong></td><td>' + percent(item.detection) +
     '</td><td>' + (item.detection ? percent(item.precision) : '—') + '</td><td>' + percent(item.recovery) + '</td><td>' + item.falseEdits +
-    '</td><td>' + item.held + '</td><td>' + item.review + '</td><td>' + esc(money(item.revenueError)) + '</td></tr>').join('');
+    '</td><td>' + item.held + '</td><td>' + item.review + '</td><td>' + esc(money(item.revenueError, 1)) + '</td></tr>').join('');
   return heading('Benchmark', 'Compare the effect of three release policies on an identical retail batch.',
     button('Download demo results', 'benchmark-export', 'download')) + heldOutBenchmark() +
-    card('Controlled corruption experiment', 'Seeded June demo · default contract v1 · labeled synthetic errors',
+    card('Controlled corruption experiment', 'Original synthetic reference dataset · GBP · labeled errors',
       '<div class="table-scroll"><table><thead><tr><th>Policy</th><th>Recall</th><th>Precision</th><th>Recovery</th><th>False edits</th><th>Quarantined</th><th>Pending</th><th>Net revenue error</th></tr></thead><tbody>' +
       rows + '</tbody></table></div>') +
     card('Evaluation method', 'Each policy sees identical input and is scored against the same pre-corruption records.',
@@ -449,7 +567,7 @@ function benchmark() {
 
 function render() {
   if (!Object.hasOwn(titles, view)) view = 'home';
-  root.innerHTML = view === 'home' ? landing() : layout({ overview, analytics, batches, review, contract, benchmark }[view]());
+  root.innerHTML = view === 'home' ? landing() : layout({ overview, output: cleanOutput, forecast: forecastPage, analytics, batches, review, contract, benchmark }[view]());
 }
 
 function navigate(destination) {
@@ -513,7 +631,7 @@ async function ingest(file) {
   if (file.size > MAX_SIZE) throw new Error('Files must be 45 MB or smaller.');
   const text = await file.text();
   const hash = await sha256(text);
-  const existing = state.entries.find(entry => !entry.demo && entry.hash === hash);
+  const existing = state.entries.find(entry => !entry.demo && entry.hash === hash && entry.contract.schema === state.contract.schema);
   if (existing) {
     state.selected = existing.id;
     await persist();
@@ -523,7 +641,7 @@ async function ingest(file) {
     return;
   }
   loadBatch(text);
-  const earlier = state.entries.findLast(entry => entry.publication && !entry.demo);
+  const earlier = state.entries.findLast(entry => entry.publication && !entry.demo && entry.contract.schema === state.contract.schema);
   const entry = {
     id: crypto.randomUUID(), name: file.name, text, hash, contract: { ...state.contract },
     createdAt: new Date().toISOString(), decisions: {},
@@ -581,9 +699,10 @@ root.addEventListener('click', async event => {
   const base = entry.name.replace(/\.[^.]*$/, '');
   if (action === 'import' || action === 'replay') document.querySelector(action === 'import' ? '#batch-file' : '#replay-file').click();
   if ((action === 'select' || action === 'demo') && !busy) {
-    state.selected = action === 'demo' ? 'demo-6' : id;
+    state.selected = action === 'demo' ? DEMO_ID : id;
     filter = 'all';
     page = 0;
+    cleanPage = 0;
     await persist();
     refresh();
     navigate('overview');
@@ -602,6 +721,11 @@ root.addEventListener('click', async event => {
     render();
     root.querySelector('[data-action="' + action + '"]:not(:disabled), .tabs button[aria-pressed="true"]')?.focus();
   }
+  if (action === 'clean-prev' || action === 'clean-next') {
+    cleanPage += action === 'clean-next' ? 1 : -1;
+    render();
+    (root.querySelector('[data-action="' + action + '"]:not(:disabled)') ?? root.querySelector('main')).focus();
+  }
   if (['approve', 'hold', 'undo'].includes(action) && !entry.publication && !busy) {
     if (action === 'undo') delete entry.decisions[key];
     else entry.decisions[key] = action;
@@ -612,7 +736,22 @@ root.addEventListener('click', async event => {
     notice(action === 'undo' ? 'Decision reverted.' : action === 'approve' ? 'Revenue correction approved.' : 'Row kept in quarantine.');
   }
   if (action === 'export' && entry.publication) download(base + '_accepted.csv', writeCsv([batch.headers, ...result.accepted.map(item => item.record)], { spreadsheetSafe: true }));
+  if (action === 'clean-export' && result.accepted.length) download(base + '_clean.csv',
+    writeCsv([cleanHeaders(batch), ...result.accepted.map(({ record }) => cleanRecord(batch, record))], { spreadsheetSafe: true }));
   if (action === 'demo-csv') download(demoPreview.entry.name, demoPreview.entry.text);
+  if (action === 'demo-history') {
+    const records = state.entries.filter(item => item.demo && item.contract.schema === 2).flatMap(item => loadBatch(item.text).records);
+    download('india_retail_demo_history.csv', writeCsv([RETAIL_HEADERS, ...records], { spreadsheetSafe: true }));
+  }
+  if (action === 'forecast-export') {
+    const { target, periods, ranking, method } = forecastDemand(forecastHistory(), forecastOptions);
+    if (target && ranking.length) download('retail_demand_forecast.csv', writeCsv([
+      ['period', 'start_date', 'end_date', 'sku', 'product_or_group', 'category', 'method', 'estimated_units', 'historical_low', 'historical_high',
+        ...periods.map(period => 'units_' + period.year)],
+      ...ranking.map(item => [target.label, target.dates[0], target.dates.at(-1), item.sku, item.label, item.category, method,
+        item.estimate, item.low, item.high, ...item.comparable])
+    ], { spreadsheetSafe: true }));
+  }
   if (action === 'quarantine') download(base + '_quarantine.csv', writeCsv([
     ['source_record', 'reason', 'values_json'], ...result.held.map(item => [item.row, item.reason, JSON.stringify(item.record)])
   ], { spreadsheetSafe: true }));
@@ -621,7 +760,7 @@ root.addEventListener('click', async event => {
     download(base + '_replay.json', JSON.stringify({ schema: 1, name, text, hash, contract: contractSnapshot, decisions, baseline, baselineHash, publication }, null, 2), 'application/json');
   }
   if (action === 'template') download('retail_orders_template.csv', writeCsv([
-    HEADERS, ['610001', 'SKU-101', '2025-06-01', 'Homeware', 'United Kingdom', 2, 12.50, 25]
+    RETAIL_HEADERS, ['610001', 'FOO-101', '2026-11-08', 'Staples', 'Mumbai', 2, 149, 298, 'Basmati rice 1 kg']
   ]));
   if (action === 'benchmark-export') {
     const results = compare(CONTRACT);
@@ -639,6 +778,17 @@ root.addEventListener('click', async event => {
 });
 
 root.addEventListener('submit', async event => {
+  if (event.target.id === 'forecast-form') {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    forecastOptions = {
+      mode: form.get('mode'), festival: form.get('festival') ?? forecastOptions.festival,
+      year: Number(form.get('year')), week: Number(form.get('week') ?? forecastOptions.week)
+    };
+    render();
+    root.querySelector('#forecast-form button').focus();
+    return;
+  }
   if (event.target.id !== 'contract-form') return;
   event.preventDefault();
   const form = new FormData(event.target);
@@ -652,6 +802,13 @@ root.addEventListener('submit', async event => {
 });
 
 root.addEventListener('change', event => {
+  if (event.target.form?.id === 'forecast-form' && event.target.name === 'mode') {
+    for (const label of event.target.form.querySelectorAll('[data-period]')) {
+      label.hidden = label.dataset.period !== event.target.value;
+      label.querySelector('input, select').disabled = label.hidden;
+    }
+    return;
+  }
   if (event.target.id !== 'revenue-dimension') return;
   dimension = event.target.value;
   render();
@@ -676,6 +833,7 @@ window.addEventListener('hashchange', () => {
   view = location.hash.slice(1) || 'home';
   filter = 'all';
   page = 0;
+  cleanPage = 0;
   render();
   document.querySelector('#content').focus({ preventScroll: true });
   window.scrollTo(0, 0);
@@ -697,8 +855,9 @@ async function start() {
   } catch {
     storageReady = false;
   }
-  if (!state?.entries?.length) {
-    state = await seed();
+  if (!state?.entries?.length) state = { schema: 1, entries: [], selected: null, contract: { ...INR_CONTRACT } };
+  if (!state.entries.some(entry => entry.id === DEMO_ID)) {
+    await addIndianDemo(state);
     await persist();
   }
   refresh();

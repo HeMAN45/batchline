@@ -8,10 +8,12 @@ export const CONTRACT = Object.freeze({
   missingRateDelta: 0.05,
   categoryDrift: 0.2
 });
+export const INR_CONTRACT = Object.freeze({ ...CONTRACT, schema: 2 });
 
 export const FIELDS = {
   order_id: ['order_id', 'orderid', 'invoice', 'invoiceno'],
   sku: ['sku', 'stockcode', 'product_code'],
+  product: ['product_name', 'item_name'],
   date: ['date', 'invoicedate', 'order_date'],
   category: ['category', 'description'],
   region: ['region', 'country'],
@@ -24,13 +26,19 @@ export const REQUIRED = ['order_id', 'date', 'category', 'region', 'quantity', '
 const numberPattern = /^-?\d+(?:\.\d+)?$/;
 const money = number => Math.round((number + Math.sign(number) * Number.EPSILON) * 100) / 100;
 const numeric = value => numberPattern.test(value) && Number.isFinite(Number(value)) ? Number(value) : null;
+const groupedRupees = /^-?(?:\d{1,3}(?:,\d{3})+|\d{1,2}(?:,\d{2})+,\d{3})(?:\.\d{1,2})?$/;
+function rupees(value) {
+  const text = value.replace(/^(-?)₹\s*/, '$1');
+  if (groupedRupees.test(text)) return numeric(text.replaceAll(',', ''));
+  return numeric(text);
+}
 const canonical = value => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 const isCancellation = value => /^C\d+$/i.test(value);
 export const decisionKey = (row, code) => row + ':' + code;
 
 export function validateContract(contract) {
   const threshold = value => Number.isFinite(value) && value >= 0 && value <= 1;
-  if (contract?.schema !== 1 || contract.id !== CONTRACT.id ||
+  if (![1, 2].includes(contract?.schema) || contract.id !== CONTRACT.id ||
       !Number.isSafeInteger(contract.version) || contract.version < 1 ||
       !['day', 'month', 'strict'].includes(contract.dateOrder) ||
       !threshold(contract.missingRateDelta) || !threshold(contract.categoryDrift)) {
@@ -104,7 +112,7 @@ export function loadBatch(text) {
   const errors = [];
   for (const [name, aliases] of Object.entries(FIELDS)) {
     const matches = normalized.flatMap((header, index) => aliases.some(alias => canonical(alias) === header) ? [index] : []);
-    if (matches.length > 1) errors.push('Multiple columns map to ' + name + '.');
+    if (matches.length > 1 && name !== 'product') errors.push('Multiple columns map to ' + name + '.');
     if (!matches.length && REQUIRED.includes(name)) errors.push('Missing required column ' + name + '.');
     columns[name] = matches[0] ?? -1;
   }
@@ -120,15 +128,16 @@ export function evaluate(batch, contract, decisions = {}, mode = 'review') {
   const changed = new Set();
   const flagged = new Set();
   let repaired = 0, cancellations = 0, inputRevenue = 0, publishedRevenue = 0;
-  const checks = { shape: 0, required: 0, date: 0, measure: 0, sign: 0, duplicate: 0, revenue: 0 };
+  const checks = { shape: 0, required: 0, date: 0, measure: 0, sign: 0, duplicate: 0, revenue: 0, currency: 0 };
   const { records, columns, headers, errors } = batch;
+  const amount = contract.schema === 2 ? rupees : numeric;
 
   for (const [index, record] of records.entries()) {
     const row = index + 2;
     const read = name => String(record[columns[name]] ?? '').trim();
-    const rawRevenue = numeric(read('revenue'));
+    const rawRevenue = amount(read('revenue'));
     const quantity = numeric(read('quantity'));
-    const price = numeric(read('unit_price'));
+    const price = amount(read('unit_price'));
     const expected = quantity === null || price === null ? null : money(quantity * price);
     inputRevenue += rawRevenue ?? (Number.isFinite(expected) ? expected : 0);
     const output = record.slice();
@@ -180,11 +189,16 @@ export function evaluate(batch, contract, decisions = {}, mode = 'review') {
       else exactRows.add(fingerprint);
 
       if (!blocked && Number.isFinite(expected)) {
+        if (contract.schema === 2 && numeric(read('unit_price')) === null) {
+          add('currency', 'Normalize unit price', read('unit_price'), price, 'Remove the rupee symbol and grouping separators for numeric CSV output.', 'auto', 'unit_price');
+        }
         if (columns.revenue < 0) resultRevenue = expected;
         else if (rawRevenue === null || Math.abs(expected - rawRevenue) > 0.01) {
           const applied = add('revenue', 'Revenue mismatch', read('revenue'), expected,
             'Quantity ' + quantity + ' × unit price ' + price.toFixed(2) + ' = ' + expected.toFixed(2) + '.', 'review', 'revenue');
           if (applied) resultRevenue = expected;
+        } else if (contract.schema === 2 && numeric(read('revenue')) === null) {
+          add('currency', 'Normalize revenue', read('revenue'), rawRevenue, 'Remove the rupee symbol and grouping separators for numeric CSV output.', 'auto', 'revenue');
         }
       }
       if (!blocked && mode !== 'observe') {
@@ -209,16 +223,17 @@ export function evaluate(batch, contract, decisions = {}, mode = 'review') {
 
 function revenueBy(batch, result, group) {
   const totals = new Map();
-  const { columns } = batch;
   for (const { record } of result.accepted) {
     const label = group(record);
     if (!label) continue;
-    const quantity = numeric(record[columns.quantity]?.trim());
-    const price = numeric(record[columns.unit_price]?.trim());
-    const revenue = columns.revenue < 0 ? money(quantity * price) : numeric(record[columns.revenue]?.trim());
-    totals.set(label, (totals.get(label) ?? 0) + (revenue ?? 0));
+    totals.set(label, (totals.get(label) ?? 0) + rowRevenue(batch, record));
   }
   return Array.from(totals, ([name, revenue]) => ({ name, revenue: money(revenue) }));
+}
+
+export function rowRevenue({ columns }, record) {
+  if (columns.revenue >= 0) return numeric(record[columns.revenue]?.trim()) ?? 0;
+  return money(numeric(record[columns.quantity]?.trim()) * numeric(record[columns.unit_price]?.trim()));
 }
 
 export function monthlyRevenue(batch, result) {
