@@ -1,6 +1,14 @@
 # Batchline
 
+[Live app on Vercel](https://batchline-ten.vercel.app/) · [Analytics](https://batchline-ten.vercel.app/#analytics) · [Benchmark results](https://batchline-ten.vercel.app/#benchmark)
+
 Batchline is a browser-local data quality gate for recurring retail files. It validates incoming batches against a versioned contract, routes uncertain revenue corrections to review, and publishes auditable accepted and quarantined outputs. It includes an installable PWA and works offline after the first online load.
+
+## Try the retail demo
+
+1. Open the [landing page](https://batchline-ten.vercel.app/) and select **Try the retail demo**. The June sample has 251 rows and five prior months for comparison. Select **Download June sample CSV** to get the input file, or **Upload your CSV** to use your own data.
+2. Open **Analytics** in the workspace sidebar. View monthly net revenue, accepted and quarantined rows, missing values, and findings by rule. Switch the revenue breakdown between **Category** and **Region**.
+3. Open **Review queue** to inspect proposed fixes. Approve a repair or hold the row, then return to **Analytics** to see the updated results.
 
 ## Run locally
 
@@ -11,7 +19,7 @@ npm run build
 npm run dev -- dist
 ```
 
-Open http://127.0.0.1:4173. Choose **Try the retail demo** on the landing page to open the June sample batch. It includes 251 rows and five prior months for comparison.
+Open [Batchline locally](http://127.0.0.1:4173/) and choose **Try the retail demo**.
 
 ```sh
 npm test
@@ -54,4 +62,4 @@ node scripts/benchmark-uci.mjs <monthly-csv-folder>
 
 ## Vercel and installation
 
-The root Vercel project runs `npm run build` and serves `dist`. The manifest and service worker are served from the site root. Install Batchline from the browser’s app menu or the in-app **Install app** button when available. iOS Safari installation is available through **Share → Add to Home Screen**.
+The [production deployment](https://batchline-ten.vercel.app/) runs `npm run build` and serves `dist`, with the manifest and service worker at the site root. After the first online load, install Batchline from the browser’s app menu or the in-app **Install app** button when available. In Safari on iOS, use **Share → Add to Home Screen**.
