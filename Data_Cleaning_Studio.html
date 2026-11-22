@@ -1,0 +1,2119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Cleaning Studio</title>
+<style>
+  :root{
+    --bg:#f4f5f6; --card:#ffffff; --ink:#1a1b1c; --muted:#6f7578;
+    --dark:#334650; --accent:#2448d8; --accent-soft:#e7f0f5;
+    --line:#e4e7e8; --line2:#b8c8cf; --code-bg:#f0f3f5; --ok:#46875c; --bad:#92453e;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:16px; line-height:1.6;
+  }
+  .wrap{max-width:1060px; margin:0 auto; padding-inline:clamp(16px,4vw,32px)}
+  h1,h2,h3{line-height:1.25; margin:0}
+  p{margin:.6em 0}
+  a{color:var(--accent)}
+  .hidden{display:none!important}
+
+  header.hero{
+    background:linear-gradient(180deg,#eef2f4 0%,var(--bg) 100%);
+    border-bottom:1px solid var(--line); padding:clamp(26px,6vw,50px) 0 clamp(20px,4vw,32px);
+  }
+  .kicker{
+    font-size:clamp(.68rem,2.4vw,.8rem); font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); margin-bottom:10px;
+  }
+  h1.title{font-size:clamp(1.7rem,6vw,2.8rem); font-weight:800; letter-spacing:-.02em}
+  .subtitle{color:var(--muted); max-width:720px; margin-top:10px; font-size:clamp(.92rem,2.6vw,1.02rem)}
+
+  nav.pipeline{position:sticky; top:0; z-index:50; background:rgba(244,245,246,.92);
+    backdrop-filter:blur(6px); border-bottom:1px solid var(--line)}
+  .chips{display:flex; gap:8px; overflow-x:auto; padding:10px 0; scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto; display:inline-flex; align-items:center; gap:7px; padding:7px 14px;
+    border-radius:999px; border:1px solid var(--line2); background:var(--card); color:var(--ink);
+    text-decoration:none; font-size:.85rem; font-weight:600; white-space:nowrap; transition:background .15s,color .15s}
+  .chip .n{display:inline-flex; width:18px; height:18px; border-radius:50%; align-items:center;
+    justify-content:center; background:var(--accent-soft); color:var(--accent); font-size:.72rem; font-weight:800}
+  .chip.active{background:var(--dark); border-color:var(--dark); color:#fff}
+  .chip.active .n{background:rgba(255,255,255,.18); color:#fff}
+  .chip:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+  main{padding:clamp(24px,5vw,42px) 0 10px}
+  section.stage{margin-bottom:clamp(32px,6vw,52px); scroll-margin-top:70px}
+  .stage-head{display:flex; align-items:flex-start; gap:14px; margin-bottom:14px}
+  .stage-num{flex:0 0 auto; width:clamp(34px,5vw,42px); height:clamp(34px,5vw,42px); border-radius:12px;
+    background:var(--dark); color:#fff; display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:clamp(1rem,3vw,1.2rem)}
+  .stage-head h2{font-size:clamp(1.25rem,4vw,1.7rem); font-weight:800; letter-spacing:-.01em; padding-top:2px}
+  .stage-head .tag{display:block; font-size:.8rem; font-weight:600; color:var(--muted); letter-spacing:.08em;
+    text-transform:uppercase; margin-bottom:2px}
+  .lede{color:var(--muted); max-width:780px; margin:0 0 18px; font-size:clamp(.95rem,2.6vw,1.02rem)}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:clamp(14px,3vw,22px); margin-bottom:14px}
+  .card h3{font-size:clamp(1rem,3vw,1.15rem); font-weight:700; margin-bottom:10px}
+  .grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr)); gap:14px}
+
+  /* upload */
+  .dropzone{
+    border:2px dashed var(--line2); border-radius:14px; background:#fafbfb;
+    padding:clamp(26px,6vw,44px) 20px; text-align:center; cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.drag{border-color:var(--accent); background:var(--accent-soft)}
+  .dz-icon{font-size:clamp(2rem,6vw,2.8rem); line-height:1}
+  .dz-main{font-weight:700; font-size:clamp(1rem,3vw,1.15rem); margin-top:10px}
+  .dz-sub{color:var(--muted); font-size:.86rem; margin-top:4px}
+  .dz-formats{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:14px}
+  .fmt{background:var(--card); border:1px solid var(--line2); border-radius:999px;
+    padding:3px 12px; font-size:.76rem; font-weight:700; color:var(--muted)}
+  .btn{
+    display:inline-flex; align-items:center; gap:8px; border-radius:10px; cursor:pointer;
+    padding:10px 18px; font:inherit; font-weight:700; font-size:.92rem; border:1px solid transparent;
+  }
+  .btn-primary{background:var(--accent); color:#fff}
+  .btn-primary:hover{background:#2e6f90}
+  .btn-ghost{background:var(--card); border-color:var(--line2); color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--accent); color:var(--accent)}
+  .btn:focus-visible{outline:2px solid var(--dark); outline-offset:2px}
+  .btn[disabled]{opacity:.5; cursor:not-allowed}
+  .filestrip{display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:var(--accent-soft);
+    border:1px solid var(--line2); border-radius:12px; padding:12px 16px; margin-bottom:16px}
+  .filestrip b{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.9rem}
+  .filestrip .meta{color:var(--muted); font-size:.82rem}
+  .banner{border-radius:10px; padding:10px 14px; font-size:.86rem; margin:10px 0}
+  .banner.warn{background:#fdf3e4; border:1px solid #ecd9b0; color:#7a5a17}
+  .banner.error{background:#f7e9e7; border:1px solid #e3b7b1; color:var(--bad)}
+  .banner.ok{background:#e8f2ec; border:1px solid #b7d4c2; color:var(--ok)}
+
+  /* KPIs */
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px}
+  .kpi{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px 12px;
+    border-top:3px solid var(--accent)}
+  .kpi b{display:block; font-size:clamp(1.25rem,4.5vw,1.7rem); font-weight:800; color:var(--dark);
+    font-variant-numeric:tabular-nums}
+  .kpi span{font-size:.78rem; color:var(--muted)}
+  .kpi .delta{font-size:.72rem; font-weight:700}
+  .up{color:var(--ok)} .down{color:var(--bad)}
+
+  /* tables */
+  .twrap{overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line); border-radius:10px}
+  table{border-collapse:collapse; width:100%; min-width:560px; font-size:.86rem}
+  th{background:var(--dark); color:#fff; text-align:left; font-weight:600; padding:9px 12px; white-space:nowrap;
+    position:sticky; top:0}
+  td{padding:7px 12px; border-top:1px solid var(--line); vertical-align:top}
+  tbody tr:nth-child(odd){background:#fafbfb}
+  td.num{font-variant-numeric:tabular-nums; white-space:nowrap}
+  .pill{display:inline-block; padding:2px 9px; border-radius:999px; font-size:.72rem; font-weight:700; white-space:nowrap}
+  .pill.fix{background:#e8f2ec; color:var(--ok)}
+  .pill.drop{background:#f7e9e7; color:var(--bad)}
+  .pill.keep{background:var(--accent-soft); color:var(--accent)}
+  .pill.warn{background:#fdf3e4; color:#7a5a17}
+  .mono{font-family:ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace; font-size:.82em}
+  td.changed{background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent); border-radius:4px;
+    position:relative; cursor:help}
+  td.dropped{opacity:.45; text-decoration:line-through}
+  tr.dropr{opacity:.55; background:#faf1f0!important}
+
+  /* rules */
+  .rules{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr)); gap:10px}
+  .rule{display:flex; align-items:flex-start; gap:12px; background:#fafbfb; border:1px solid var(--line);
+    border-radius:10px; padding:10px 14px}
+  .rule .rt{flex:1}
+  .rule .rt b{display:block; font-size:.92rem}
+  .rule .rt span{font-size:.78rem; color:var(--muted)}
+  .rule .hit{font-size:.72rem; font-weight:800; color:var(--accent); white-space:nowrap; padding-top:2px}
+  .switch{position:relative; width:40px; height:22px; flex:0 0 auto; margin-top:2px}
+  .switch input{opacity:0; width:0; height:0}
+  .slider{position:absolute; inset:0; background:var(--line2); border-radius:999px; cursor:pointer;
+    transition:background .15s}
+  .slider::before{content:""; position:absolute; width:16px; height:16px; left:3px; top:3px; border-radius:50%;
+    background:#fff; transition:transform .15s}
+  .switch input:checked + .slider{background:var(--accent)}
+  .switch input:checked + .slider::before{transform:translateX(18px)}
+  .switch input:focus-visible + .slider{outline:2px solid var(--dark); outline-offset:2px}
+
+  /* log */
+  .steps{list-style:none; margin:0; padding:0; display:grid; gap:8px}
+  .steps li{display:flex; align-items:baseline; gap:12px; background:#fafbfb; border:1px solid var(--line);
+    border-radius:9px; padding:9px 14px}
+  .steps .sn{flex:0 0 auto; width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff;
+    display:inline-flex; align-items:center; justify-content:center; font-size:.75rem; font-weight:800;
+    transform:translateY(3px)}
+  .steps .sa{flex:1; font-size:.92rem}
+  .steps .sa small{display:block; color:var(--muted); font-size:.78rem}
+  .steps .sc{color:var(--dark); font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap; font-size:.88rem}
+  .steps li.none{opacity:.55}
+  .steps li.none .sn{background:var(--line2)}
+  .steps li.none .sc{color:var(--muted); font-weight:600}
+
+  /* charts */
+  .fig-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:8px}
+  .fig-head h3{margin:0}
+  .fig-head small{color:var(--muted)}
+  .chartbox{position:relative}
+  .chartbox svg{display:block; width:100%; max-width:100%; height:auto}
+  .tip{position:absolute; pointer-events:none; background:var(--dark); color:#fff; border-radius:7px;
+    padding:6px 10px; font-size:.78rem; line-height:1.45; opacity:0; transition:opacity .12s;
+    transform:translate(-50%,-115%); white-space:nowrap; z-index:5}
+  .tip b{font-size:.86rem}
+  .bar{transition:opacity .15s}
+  .dim{opacity:.35}
+  select{font:inherit; font-size:.86rem; padding:6px 10px; border-radius:8px; border:1px solid var(--line2);
+    background:var(--card); color:var(--ink); max-width:100%}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:.8rem; color:var(--muted)}
+  .legend .sw{display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; vertical-align:-1px}
+
+  /* row browser */
+  .browser-bar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px}
+  .browser-bar input[type="search"]{font:inherit; font-size:.86rem; padding:8px 12px; border-radius:8px;
+    border:1px solid var(--line2); flex:1 1 180px; min-width:0}
+  .pager{display:flex; gap:6px; align-items:center; font-size:.82rem; color:var(--muted)}
+  .pager button{border:1px solid var(--line2); background:var(--card); border-radius:8px; padding:5px 12px;
+    font:inherit; font-size:.82rem; font-weight:700; cursor:pointer}
+  .pager button[disabled]{opacity:.4; cursor:not-allowed}
+  .seg{display:inline-flex; border:1px solid var(--line2); border-radius:9px; overflow:hidden}
+  .seg button{border:0; background:var(--card); padding:8px 16px; font:inherit; font-weight:600; font-size:.85rem;
+    color:var(--muted); cursor:pointer}
+  .seg button.on{background:var(--accent); color:#fff}
+  .seg button:focus-visible{outline:2px solid var(--dark); outline-offset:-2px}
+
+  /* export */
+  .exports{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); gap:12px}
+  .exp{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px;
+    display:flex; flex-direction:column; gap:8px}
+  .exp b{font-size:.92rem}
+  .exp span{font-size:.8rem; color:var(--muted); flex:1}
+  .exp .btn{align-self:flex-start}
+
+  footer{border-top:1px solid var(--line); padding:22px 0 34px; color:var(--muted); font-size:.82rem}
+  footer b{color:var(--ink)}
+  .spin{display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,.4);
+    border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.spin{animation:none}}
+
+:root{--bg:#f2f5fa;--card:#fff;--ink:#16233a;--muted:#52637a;--dark:#172b43;--accent:#146651;--accent-soft:#e1f4eb;--line:#e0e7ef;--line2:#becddd}
+[hidden]{display:none!important}
+body{display:grid;grid-template-columns:235px minmax(0,1fr);font:14px/1.55 "Segoe UI",system-ui,sans-serif;min-height:100vh}
+.sidebar{background:#101d31;color:#c2cee0;height:100vh;position:sticky;top:0;display:flex;flex-direction:column;overflow:auto;padding:24px 16px 18px}
+.brand{color:white;font-weight:700;font-size:15px;display:flex;align-items:center;gap:11px;text-decoration:none;padding:0 4px 22px}
+.brand i,.upload-icon{display:grid;place-items:center;width:34px;height:34px;background:#b2f3d3;color:#154635;border-radius:9px;font-style:normal;font-size:20px;flex:none}
+.nav-label{font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:#9aaec8;margin:15px 10px 5px}
+.chips{flex-direction:column;gap:4px;padding:0;overflow:visible}
+.chip{padding:8px 10px;border:0;border-radius:8px;color:#c2cee0;background:transparent;font-size:13px}.chip svg{width:17px;height:17px;flex:none}
+.chip:hover{background:#20334d;color:white}.chip.active{background:#29414b;color:#c1f6de}
+.sidebar small{margin-top:auto;padding:16px 9px 0;font-size:12px}.sidebar small::before{content:"";display:inline-block;width:7px;height:7px;background:#71e3ac;border-radius:50%;margin-right:7px}
+.topbar{position:sticky;top:0;z-index:15;height:60px;background:#fff;border-bottom:1px solid var(--line);padding:0 clamp(15px,4vw,44px);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.topbar strong{margin-left:8px}.topbar span{color:var(--muted)} .topbar div{display:flex;align-items:center;gap:7px}
+main.wrap{max-width:1330px;padding:26px clamp(15px,4vw,44px) 36px}.stage{min-width:0} section.stage{margin-bottom:0}
+.stage-num,.stage-head .tag,.steps .sn{display:none}
+.stage-head h2{font-size:clamp(1.55rem,3vw,2.2rem);letter-spacing:-.04em}.lede{font-size:14px}
+.card,.exp,.kpi{border-radius:14px;box-shadow:0 4px 16px #17295207}.kpi{border-top:1px solid var(--line);min-width:0}.kpi b{letter-spacing:-.045em;overflow-wrap:anywhere}.kpis{margin-bottom:15px}
+.btn{padding:8px 13px;font-size:13px;border-radius:8px;line-height:1.35;justify-content:center}.btn.small{padding:5px 8px;font-size:12px}.btn-primary:hover{background:#104c3d}
+th{background:#edf2f8;color:#354762;font-size:12px;position:static} tbody tr:nth-child(odd){background:#fff}tbody tr:hover{background:#f8fafc} td{vertical-align:middle}
+.upload-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(210px,1fr);gap:15px}.upload-grid .card{margin:0}.dropzone{padding:24px 12px;background:#f7fafc;border:1px dashed #a9bacc;display:grid;justify-items:center}.upload-icon{background:var(--accent-soft)}
+.flow{display:grid;gap:11px;padding-left:18px;margin:10px 0}.flow span{display:block;color:var(--muted);font-size:12px}
+.filestrip{background:#fff;border-color:var(--line)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}.push{margin-inline-start:auto}
+.field{display:flex;flex-direction:column;gap:4px;font-weight:650;font-size:12px;min-width:0}.field input,.field select{font:inherit;font-weight:400;font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line2);border-radius:8px;padding:7px 8px;min-width:0}
+.check-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:9px;align-items:end}
+.subtle{color:var(--muted);font-size:13px}.empty{background:#f7f9fc;color:var(--muted);padding:18px;text-align:center;border-radius:9px}
+.review-table td{overflow-wrap:anywhere}.review-table td:nth-child(3),.review-table td:nth-child(4){max-width:200px}.review-actions{display:flex;gap:5px;flex-wrap:wrap}
+.review-badge:not(:empty){margin-left:auto;border-radius:99px;background:#466474;color:white;padding:1px 7px;font-size:10px}
+.retail-trend svg{width:100%;height:auto;display:block}.mini-bars{display:grid;gap:10px}.mini-bar{display:grid;grid-template-columns:minmax(65px,1fr) minmax(50px,2fr) auto;align-items:center;gap:8px;font-size:12px}.mini-bar span{overflow-wrap:anywhere}.mini-bar meter{width:100%;accent-color:#3157df}.mini-bar meter::-webkit-meter-optimum-value{background:#3157df}
+dialog{width:min(430px,calc(100% - 24px));border:1px solid var(--line2);border-radius:14px;padding:23px;color:var(--ink);box-shadow:0 20px 65px #101d3150}dialog::backdrop{background:#101d3175}dialog .actions{justify-content:flex-end;margin:14px 0 0}
+button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible,.dropzone:focus-visible{outline:2px solid #3157df;outline-offset:2px}
+@media(max-width:900px){body{grid-template-columns:190px minmax(0,1fr)}.sidebar{padding-inline:11px}.upload-grid{grid-template-columns:1fr}}
+@media(max-width:640px){body{display:block}.sidebar{height:auto;z-index:25;padding:10px 12px;overflow:hidden}.sidebar small,.nav-label,.chip svg,.topbar span{display:none}.brand{padding:0 0 6px}.brand i{width:27px;height:27px}.chips{flex-direction:row;overflow-x:auto;scrollbar-width:thin}.chip{padding:6px 9px}.topbar{height:49px;position:static}.topbar strong{margin:0}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.push{margin-inline-start:0}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media(max-width:640px){
+  .chips{scrollbar-width:none}.chips::-webkit-scrollbar{display:none}
+  .review-table,.review-table tbody{display:block;min-width:0}
+  .review-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .review-table tr{display:grid;grid-template-columns:1fr 1fr;padding:10px 12px;border-bottom:1px solid var(--line)}
+  .review-table tr:last-child{border-bottom:0}
+  .review-table td{display:block;max-width:none!important;border:0;padding:4px 3px}
+  .review-table td:first-child::before{content:"Row ";color:var(--muted)}
+  .review-table td:nth-child(3)::before,.review-table td:nth-child(4)::before{display:block;color:var(--muted);font-size:11px;font-weight:650}
+  .review-table td:nth-child(3)::before{content:"Original"}.review-table td:nth-child(4)::before{content:"Proposed"}
+  .review-table td:last-child{grid-column:1/-1}
+}
+
+
+
+/* Product theme */
+:root{
+  --bg:#f7f8fc;--card:#fff;--ink:#141c32;--muted:#555f76;--dark:#182746;
+  --accent:#2448d8;--accent-soft:#eaf0ff;--line:#e1e5ef;--line2:#cbd3e3;
+  --code-bg:#f0f3fa;--ok:#167050;--bad:#973b48;--blue:#2143d0;
+}
+body{display:block;background:white;font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif}
+.landing-width{width:min(1220px,calc(100% - 96px));margin-inline:auto}
+.studio-landing{background:#fff;color:var(--ink)}
+.studio-landing main{padding:0}
+.landing-header{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:75px;border-bottom:1px solid var(--line)}
+.studio-wordmark{display:inline-flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none;font-weight:700;font-size:15px;letter-spacing:-.025em}
+.studio-wordmark svg{width:32px;height:32px;flex:none;color:var(--blue)}
+.landing-header nav{display:flex;align-items:center;gap:26px}
+.landing-header nav>a{color:var(--muted);font-size:13px;text-decoration:none;white-space:nowrap}
+.landing-header nav>a:hover{color:var(--accent);text-decoration:underline;text-underline-offset:4px}
+.landing-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:43px;padding:10px 16px;font:inherit;font-weight:650;font-size:13px;line-height:1.15;cursor:pointer;white-space:nowrap;border:1px solid transparent;border-radius:6px}
+.landing-primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.landing-primary:hover,.studio-app .btn-primary:hover{background:#1734b1}
+.landing-quiet{background:#fff;color:var(--dark);border-color:var(--line2)}
+.landing-quiet:hover{background:#f0f4ff;color:var(--accent);border-color:#a6b6e5}
+.landing-hero{padding:clamp(43px,6vw,86px) 0;display:grid;grid-template-columns:minmax(0,.78fr) minmax(0,1fr);align-items:center;gap:clamp(30px,5vw,80px)}
+.hero-copy h1,.landing-process h2,.studio-app .stage-head h1,.studio-app .stage-head h2{font-family:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;font-weight:650;letter-spacing:-.06em}
+.hero-copy h1{font-size:clamp(2.85rem,5vw,4.8rem);line-height:1;max-width:530px}
+.hero-copy h1 em{color:var(--blue);font-style:normal}
+.hero-copy>p{color:var(--muted);font-size:clamp(1rem,1.25vw,1.125rem);line-height:1.65;max-width:420px;margin:23px 0 25px}
+.landing-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hero-copy .local-note{display:flex;align-items:center;gap:7px;color:#586784;font-size:12px;margin:17px 0 0}
+.local-note svg{width:15px;height:15px;flex:none;color:var(--accent)}
+.preview-scene{margin:0;min-width:0;position:relative;overflow:hidden;isolation:isolate;border-radius:12px;background-color:#2445d1;background-image:radial-gradient(#c6d2ff7d 1px,transparent 1px);background-size:19px 19px;padding:clamp(22px,5vw,70px) clamp(15px,3.4vw,54px) 24px}
+.preview-scene::before,.preview-scene::after{position:absolute;z-index:-1;pointer-events:none;content:"";width:82%;aspect-ratio:1;right:-31%;top:-52%;border:1px solid #cbd8ff85;border-radius:50%;box-shadow:0 0 0 28px #d4deff22,0 0 0 54px #d4deff17}
+.preview-scene::after{right:auto;top:auto;bottom:-74%;left:-22%;width:60%;border-color:#9bafff66}
+.preview-window{overflow:hidden;background:#fff;border:1px solid #e3e9ff;border-radius:9px;box-shadow:0 17px 32px #101e825e}
+.preview-bar{display:flex;align-items:center;justify-content:space-between;gap:7px;min-width:0;background:#f4f6fd;border-bottom:1px solid #e3e8f3;padding:10px 12px;color:#374976}
+.preview-file{display:inline-flex;align-items:center;gap:7px;min-width:0;font:11px ui-monospace,Consolas,monospace}
+.preview-file span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview-file svg{width:15px;height:15px;flex:none;color:var(--blue)}
+.preview-tag{flex:none;font-size:10px;color:#4c5f82}
+.preview-content{padding:16px}
+.preview-titlebar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:13px}
+.preview-titlebar h2{font-size:17px;letter-spacing:-.025em}
+.preview-toggle{display:inline-flex;align-items:center;background:#eff2f9;border:1px solid #e3e7f1;border-radius:6px;padding:2px}
+.preview-toggle button{font:inherit;font-size:10px;font-weight:650;color:#485875;background:transparent;border:0;padding:6px 8px;border-radius:4px;cursor:pointer}
+.preview-toggle button[aria-pressed=true]{background:white;color:var(--blue);box-shadow:0 1px 3px #1e37782a}
+.preview-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;background:#f0f4ff;border:1px solid #e6ebfa;border-radius:6px;margin-bottom:10px}
+.preview-stats div{padding:9px 11px}
+.preview-stats div+div{border-left:1px solid #dbe4fb}
+.preview-stats strong{display:block;color:#233b9e;font-size:24px;letter-spacing:-.035em;font-weight:670;line-height:1.08;font-variant-numeric:tabular-nums}
+.preview-stats span{color:#566580;font-size:10px}
+.preview-table{min-width:0;table-layout:fixed;color:#1c2a4a;font-size:11px}
+.preview-table th{background:transparent;color:#526582;font-size:10px;position:static;padding:7px 4px 7px 0;white-space:normal}
+.preview-table th:first-child{width:23%}.preview-table th:nth-child(2){width:33%}
+.preview-table tbody tr{background:white}
+.preview-table td{border-top:1px solid #e6eaf3;padding:7px 4px 7px 0;overflow-wrap:anywhere}
+.preview-table td:last-child span{display:inline-block;background:#eaf0ff;color:#2543a9;border-radius:4px;padding:2px 5px}
+.preview-table[data-original] td:last-child span{background:#fff3e3;color:#815324}
+.preview-scene figcaption{position:relative;text-align:center;margin-top:15px;color:#fff;font-size:11px}
+.landing-process{background:#f5f7fd;border-top:1px solid #e7ecf7;padding:34px 0 42px}
+.landing-process h2{font-size:clamp(1.65rem,2.5vw,2.15rem)}
+.landing-process ol{list-style:none;padding:0;margin:17px 0 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid #d9e2f5}
+.landing-process li{padding:15px 20px 0 0}
+.landing-process li+li{border-left:1px solid #d9e2f5;padding-left:22px}
+.landing-process h3{font-size:1rem}
+.landing-process p{color:var(--muted);font-size:13px;margin:7px 0 0;max-width:35ch}
+
+.studio-app{display:block;min-height:100vh;background:var(--bg)}
+.workspace-header{position:sticky;top:0;z-index:25;background:#fff;border-bottom:1px solid var(--line)}
+.workspace-bar{display:flex;align-items:center;justify-content:space-between;gap:17px;min-height:64px}
+.workspace-bar .brand{padding:0;min-width:0}
+.workspace-bar .brand span{white-space:nowrap}
+.workspace-actions{display:flex;align-items:center;gap:8px;min-width:0}
+.workspace-filename{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:32ch;color:var(--muted);font-size:12px;margin-right:7px}
+.workspace-header .chips{flex-direction:row;overflow-x:auto;gap:4px;scrollbar-width:thin;padding:0}
+.workspace-header .nav-label{display:none}
+.workspace-header .chip{color:#4c5974;background:transparent;border:0;border-radius:0;border-bottom:2px solid transparent;padding:11px 9px;gap:6px;font-size:12px;line-height:1.25}
+.workspace-header .chip:hover{background:#f2f5ff;color:var(--blue)}
+.workspace-header .chip.active{border-bottom-color:var(--blue);color:#2040b6;background:transparent;font-weight:700}
+.workspace-header .chip svg{width:15px;height:15px}
+.workspace-header .review-badge:not(:empty){background:#e6edff;color:#2240a4;padding:1px 5px}
+.studio-app main.wrap{width:min(1220px,calc(100% - 96px));max-width:none;padding:36px 0 45px}
+.studio-app .stage-head h1,.studio-app .stage-head h2{font-size:clamp(1.9rem,3.4vw,2.8rem);line-height:1.08}
+.studio-app .stage-head{margin-bottom:10px}
+.studio-app .lede{max-width:70ch;color:var(--muted)}
+.studio-app .card,.studio-app .exp,.studio-app .kpi{border-radius:8px;box-shadow:none}
+.studio-app .kpi b{font-weight:680;color:#152344}
+.studio-app .btn{border-radius:6px;font-weight:650}
+.studio-app .rule,.studio-app .steps li,.studio-app .empty{background:#f5f7fc}
+.studio-app table th{background:#edf1f9;color:#3b4b6b}
+.studio-app tbody tr:hover{background:#f4f7ff}
+.studio-app .upload-grid{grid-template-columns:minmax(0,1.65fr) minmax(0,1fr)}
+.studio-app .dropzone{background:#f6f8ff;border-color:#a0b4ec;padding:35px 16px}
+.studio-app .dropzone:hover,.studio-app .dropzone.drag{background:#ebf1ff;border-color:var(--accent)}
+.studio-app .upload-icon{background:#e9efff;color:var(--accent)}
+.studio-app .upload-icon svg{width:19px;height:19px}
+.studio-app .demo-card{background:#edf2ff;border-color:#dce5fb;display:flex;flex-direction:column;align-items:flex-start;justify-content:center}
+.studio-app .demo-card p{max-width:34ch;color:#4a5a7a;margin:0 0 16px}
+.studio-app .mini-bar meter::-webkit-meter-optimum-value{background:#3157df}
+.studio-app .focus-target:focus{outline:0}
+.studio-wordmark:focus-visible,.landing-button:focus-visible,.preview-toggle button:focus-visible,.studio-app :is(button,a,input,select):focus-visible{outline:2px solid #2459ee;outline-offset:3px}
+@media(max-width:960px){
+  .landing-width,.studio-app main.wrap{width:calc(100% - 52px)}
+  .landing-hero{gap:25px}
+  .preview-content{padding:12px}
+  .preview-scene{padding:36px 14px 16px}
+}
+@media(max-width:720px){
+  .landing-width,.studio-app main.wrap{width:calc(100% - 34px)}
+  .landing-header{min-height:65px;gap:10px}
+  .landing-header nav>a,.workspace-filename{display:none}
+  .landing-hero{grid-template-columns:minmax(0,1fr);gap:30px;padding:40px 0 35px}
+  .hero-copy h1{font-size:clamp(2.9rem,10vw,4rem)}
+  .hero-copy>p{margin:18px 0 21px}
+  .preview-scene{padding:24px 13px 14px}
+  .landing-process ol{grid-template-columns:1fr}
+  .landing-process li,.landing-process li+li{border-left:0;border-bottom:1px solid #d9e2f5;padding:13px 0}
+  .workspace-bar{min-height:57px;gap:9px}
+  .workspace-bar .studio-wordmark{font-size:13px}
+  .workspace-header .chip{padding:10px 8px}
+  .workspace-header .chip svg{display:none}
+  .studio-app main.wrap{padding-top:23px}
+  .studio-app .upload-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:400px){
+  .studio-wordmark{font-size:13px;gap:7px}
+  .studio-wordmark svg{width:27px;height:27px}
+  .landing-header .landing-button,.workspace-actions .btn{padding-inline:8px;font-size:12px}
+  .hero-copy h1{font-size:clamp(2.65rem,10vw,3.25rem)}
+  .preview-toggle button{padding-inline:5px}
+}
+
+</style>
+</head>
+<body>
+
+
+
+<div class="studio-landing" id="landing">
+  <header class="landing-header landing-width">
+    <a class="studio-wordmark" href="#landing" aria-label="Data Cleaning Studio home">
+      <svg viewBox="0 0 36 36" aria-hidden="true"><rect width="36" height="36" rx="8" fill="currentColor"/><path d="M9 10h17v16H9z M9 16h17 M15 16v10 M21 16v10" stroke="#ffffff" stroke-width="1.45" fill="none"/><path d="m22 20 2 2 5-5" stroke="#ffffff" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+      <span>Data Cleaning Studio</span>
+    </a>
+    <nav aria-label="Product"><a href="#how-it-works">How it works</a><button class="landing-button landing-quiet" type="button" data-workspace>Open workspace <span aria-hidden="true">↗</span></button></nav>
+  </header>
+  <main>
+    <section class="landing-hero landing-width" aria-labelledby="landing-title">
+      <div class="hero-copy">
+        <h1 id="landing-title">Get your data<br> <em>analysis-ready.</em></h1>
+        <p>Catch missing values, duplicates, and inconsistent formats. Review the fixes and export a clean dataset with a record of every change.</p>
+        <div class="landing-actions">
+          <button class="landing-button landing-primary" type="button" data-workspace="upload">Clean a dataset <span aria-hidden="true">→</span></button>
+          <button class="landing-button landing-quiet" id="landing-demo" type="button">Run the retail demo</button>
+        </div>
+        <p class="local-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Files stay on your device</p>
+      </div>
+      <figure class="preview-scene" aria-labelledby="preview-title">
+        <div class="preview-window">
+          <div class="preview-bar">
+            <span class="preview-file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" aria-hidden="true"><path d="M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 16h6"/></svg><span>demo_dirty_sales.csv</span></span>
+            
+          </div>
+          <div class="preview-content">
+            <div class="preview-titlebar"><h2 id="preview-title">Review fixes</h2><div class="preview-toggle" role="group" aria-label="Preview values"><button id="preview-original" type="button" aria-pressed="false">Original</button><button id="preview-proposed" type="button" aria-pressed="true">Proposed</button></div></div>
+            <div class="preview-stats">
+              <div><strong id="preview-rows">—</strong><span>Source rows</span></div>
+              <div><strong id="preview-count">—</strong><span>Suggested fixes</span></div>
+            </div>
+            <table class="preview-table" aria-label="Selected suggestions from the retail demo">
+              <thead><tr><th>Source row</th><th>Field</th><th id="preview-value-label" aria-live="polite">Proposed value</th></tr></thead>
+              <tbody id="preview-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <figcaption>Interactive preview · Retail demo</figcaption>
+      </figure>
+    </section>
+    <section class="landing-process" id="how-it-works" aria-labelledby="process-title">
+      <div class="landing-width">
+        <h2 id="process-title">What you can do</h2>
+        <ol>
+          <li><h3>Profile your file</h3><p>Spot missing values, inconsistent types, and duplicates as soon as you load a dataset.</p></li>
+          <li><h3>Review and validate</h3><p>Approve, reject, or edit suggested changes. Check the result against your own rules.</p></li>
+          <li><h3>Export with an audit trail</h3><p>Download your clean CSV, change log, and report. Save a recipe for the next file.</p></li>
+        </ol>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="studio-app" id="studio-app" hidden>
+<header class="workspace-header">
+  <div class="workspace-bar landing-width">
+    <a class="brand studio-wordmark" href="#landing" aria-label="Return to Data Cleaning Studio home"><svg viewBox="0 0 36 36" aria-hidden="true"><rect width="36" height="36" rx="8" fill="currentColor"/><path d="M9 10h17v16H9z M9 16h17 M15 16v10 M21 16v10" stroke="#ffffff" stroke-width="1.45" fill="none"/><path d="m22 20 2 2 5-5" stroke="#ffffff" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg><span>Data Cleaning Studio</span></a>
+    <div class="workspace-actions">
+      <span class="workspace-filename" id="workspace-filename" hidden></span>
+      <span id="current-panel" hidden>Datasets</span>
+      <button class="btn btn-ghost" id="top-upload" type="button">Upload</button>
+      <button class="btn btn-primary" id="top-export" type="button" hidden>Export</button>
+    </div>
+  </div>
+  <nav class="chips landing-width" id="chips" aria-label="Workspace"><div class="nav-label">Pipeline</div><a class="chip" href="#upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z M3 7V5h7l2 2h7"/></svg><span>Datasets</span></a><a class="chip" href="#profile" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4z M4 9h16 M9 9v11 M14 9v11"/></svg><span>Data profile</span></a><a class="chip" href="#rules" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16 M4 12h16 M4 17h16 M8 5v4 M15 10v4 M10 15v4"/></svg><span>Cleaning rules</span></a><a class="chip" href="#review" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14v16H5z M8 9l2 2 4-4 M8 15h8"/></svg><span>Review fixes</span><span class="review-badge" id="review-count"></span></a><a class="chip" href="#rows" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v14H3z M3 10h18 M3 15h18 M9 5v14"/></svg><span>Browse rows</span></a><a class="chip" href="#validation" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4-3 7-7 10-4-3-7-6-7-10V6z M9 12l2 2 4-4"/></svg><span>Validation &amp; recipes</span></a><div class="nav-label" id="results-label" hidden>Results</div><a class="chip" href="#report" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 16h6"/></svg><span>Cleaning report</span></a><a class="chip" href="#charts" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19h16 M7 15v-4 M12 15V6 M17 15V9"/></svg><span>Quality charts</span></a><a class="chip" href="#retail" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19h16 M5 14l5-5 4 2 5-6 M16 5h3v3"/></svg><span>Retail dashboard</span></a><a class="chip" href="#export" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12 M8 11l4 4 4-4 M5 15v5h14v-5"/></svg><span>Export</span></a></nav>
+</header>
+<div style="min-width:0">
+  <main class="wrap">
+<section class="stage" id="upload">
+  <div class="stage-head"><h1 class="focus-target" id="datasets-title" tabindex="-1">Datasets</h1></div>
+  <p class="lede">Load a file to profile its columns and review suggested fixes.</p>
+  <div id="loaded-area" class="hidden"><div class="filestrip">
+    <span class="upload-icon" aria-hidden="true">▤</span><div style="flex:1;min-width:0;overflow-wrap:anywhere">
+      <b id="fs-name"></b><div class="meta" id="fs-meta"></div></div>
+    <button class="btn btn-ghost" id="btn-reupload" type="button">Load another file</button>
+  </div></div>
+  <div class="upload-grid">
+    <div class="card"><h3>Upload a dataset</h3>
+      <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Browse for a dataset">
+        <span class="upload-icon" aria-hidden="true">↑</span><div class="dz-main">Drag and drop or browse files</div>
+        <div class="dz-sub">CSV, TSV, or delimited TXT · Up to 30 MB</div>
+      </div>
+      <input type="file" id="file-input" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden>
+    </div>
+    <div class="card demo-card">
+      <h3>Explore the retail demo</h3>
+      <p>Try a sample dataset with duplicates, missing values, and inconsistent sales records.</p>
+      <button class="btn btn-primary" id="btn-demo" type="button">Load sample data</button>
+    </div>
+  </div>
+  <div id="upload-msg" role="status"></div>
+</section>
+<section class="stage" hidden id="profile">
+  <div class="stage-head">
+    <h2>Data profile</h2>
+  </div>
+  <p class="lede">Every column is inspected before anything is fixed: type inference, missing values, distinct
+    values, duplicates. The numbers here are the baseline the cleaning report is measured against. You can override
+    the inferred type of any column   the pipeline re-runs with your choice.</p>
+  <div class="kpis" id="profile-kpis" style="margin-bottom:14px"></div>
+  <div class="card">
+    <h3>Column profile</h3>
+    <div class="twrap"><table id="profile-table">
+      <thead><tr><th>Column</th><th>Inferred type</th><th>Missing</th><th>Distinct</th><th>Sample values</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:0">Types drive the rules: <b>date</b> columns get
+      format unification, <b>numeric</b> columns get coercion / outlier / imputation logic, <b>category</b> columns
+      get casing + typo merging, <b>identifier</b> columns are left verbatim, <b>text</b> columns are trimmed only.</p>
+  </div>
+</section>
+
+<!-- ============ 2 · RULES ============ -->
+<section class="stage" hidden id="rules">
+  <div class="stage-head">
+    <h2>Cleaning rules</h2>
+  </div>
+  <p class="lede">Twelve ordered rules run top to bottom. Toggle any rule and the dataset re-cleans instantly  
+    the report, tables and charts all update. Badges show how many rows each rule touched on the last run.</p>
+  <div class="card">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px">
+      <button class="btn btn-primary" id="btn-reclean" type="button">Re-run pipeline</button>
+      <button class="btn btn-ghost" id="btn-reset-rules" type="button">Reset to recommended</button>
+    </div>
+    <div class="rules" id="rules-grid"></div>
+  </div>
+</section>
+
+<!-- ============ 3 · REPORT ============ -->
+<section class="stage" hidden id="report">
+  <div class="stage-head">
+    <h2>Cleaning report</h2>
+  </div>
+  <p class="lede">Every rule logs what it did and how many rows or cells it touched. The result strip compares the
+    raw table against the final one; the column table shows the before → after movement per column.</p>
+  <div class="kpis" id="result-kpis"></div>
+  <div class="card" id="benchmark" hidden></div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Pipeline log</h3>
+      <ol class="steps" id="clean-log"></ol>
+    </div>
+    <div class="card">
+      <h3>Standardization map</h3>
+      <p style="font-size:.8rem;color:var(--muted);margin:0 0 8px">Values rewritten by casing or typo rules,
+        with the number of rows affected.</p>
+      <div class="twrap"><table id="map-table" style="min-width:0">
+        <thead><tr><th>Column</th><th>From</th><th>To</th><th>Rows</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Column movement   before → after</h3>
+    <div class="twrap"><table id="movement-table">
+      <thead><tr><th>Column</th><th>Type</th><th>Cells changed</th><th>Missing before → after</th>
+        <th>Distinct before → after</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ 4 · VISUALIZE ============ -->
+<section class="stage" hidden id="charts">
+  <div class="stage-head">
+    <h2>Quality charts</h2>
+  </div>
+  <p class="lede">Four views generated from your file: what the rules fixed, where missing values lived, how
+    category variants collapsed, and how a numeric column’s distribution changed after outlier repair and
+    imputation. Hover anything for exact values.</p>
+  <div class="card">
+    <div class="fig-head"><h3>Fixes by rule</h3><small>rows touched per rule</small></div>
+    <div class="chartbox" id="chart-fixes"></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="fig-head"><h3>Missing values by column</h3><small>before vs after</small></div>
+      <div class="chartbox" id="chart-missing"></div>
+      <div class="legend" style="margin-top:8px">
+        <span><span class="sw" style="background:#c2cdd2"></span>before</span>
+        <span><span class="sw" style="background:#2448d8"></span>after cleaning</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="fig-head"><h3>Distinct values in category columns</h3><small>variant collapse</small></div>
+      <div class="chartbox" id="chart-distinct"></div>
+      <div class="legend" style="margin-top:8px">
+        <span><span class="sw" style="background:#c2cdd2"></span>before</span>
+        <span><span class="sw" style="background:#2448d8"></span>after cleaning</span>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="fig-head"><h3>Numeric distribution   before vs after</h3>
+      <span style="display:flex; gap:8px; align-items:center"><small>column</small>
+        <select id="hist-col" aria-label="Numeric column to plot"></select></span></div>
+    <div class="chartbox" id="chart-hist"></div>
+    <div class="legend" style="margin-top:8px">
+      <span><span class="sw" style="background:#c2cdd2"></span>raw (incl. outliers)</span>
+      <span><span class="sw" style="background:#2448d8"></span>cleaned</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5 · BROWSE ROWS ============ -->
+<section class="stage" hidden id="rows">
+  <div class="stage-head">
+    <h2>Browse rows</h2>
+  </div>
+  <p class="lede">Switch between the raw table and the cleaned one. In the cleaned view every modified cell is
+    highlighted   hover it to see the original value. Rows removed by the pipeline stay visible (greyed, struck
+    through) with the rule that dropped them. Search filters both views.</p>
+  <div class="card">
+    <div class="browser-bar">
+      <div class="seg" role="group" aria-label="Raw or clean view">
+        <button id="btn-raw" class="on" type="button">Raw</button>
+        <button id="btn-clean" type="button">Clean</button>
+      </div>
+      <input type="search" id="row-search" placeholder="Search all columns…" aria-label="Search rows">
+      <div class="pager">
+        <button id="pg-prev" type="button">‹</button>
+        <span id="pg-label"></span>
+        <button id="pg-next" type="button">›</button>
+      </div>
+    </div>
+    <div class="twrap"><table id="rows-table">
+      <thead></thead><tbody></tbody>
+    </table></div>
+    <div id="rows-msg" style="font-size:.8rem;color:var(--muted);margin-top:8px"></div>
+  </div>
+</section>
+
+<!-- ============ 6 · EXPORT ============ -->
+<section class="stage" hidden id="export">
+  <div class="stage-head">
+    <h2>Export results</h2>
+  </div>
+  <p class="lede">Everything the studio produced is downloadable: the repaired dataset, the machine-readable
+    cleaning report, and a human-readable issue log. Files are generated locally in your browser.</p>
+  <p class="subtle" id="export-status" role="status"></p>
+  <div class="exports">
+    <div class="exp"><b>Cleaned dataset</b><span>The cleaned table as CSV   same columns as your upload, ISO
+      dates, repaired and imputed values, invalid rows removed.</span>
+      <button class="btn btn-primary" id="dl-clean" type="button">cleaned.csv</button></div>
+    <div class="exp"><b>Cleaning report (JSON)</b><span>Full audit: pipeline log, per-column movement, the
+      standardization map and KPIs   ideal for documentation or a downstream script.</span>
+      <button class="btn btn-primary" id="dl-json" type="button">cleaning_report.json</button></div>
+    <div class="exp"><b>Issue log (CSV)</b><span>One row per fix: rule, column, value before → after. Opens in
+      any spreadsheet for review.</span>
+      <button class="btn btn-primary" id="dl-log" type="button">issue_log.csv</button></div>
+  </div>
+</section>
+
+<section class="stage" id="review" hidden>
+  <div class="stage-head"><h2>Review fixes</h2></div>
+  <p class="lede">Approve, reject, or edit suggested changes. Pending suggestions stay out of the exported changes.</p>
+  <div class="kpis" id="review-kpis"></div>
+  <div class="card">
+    <div class="actions">
+      <label class="field">Show<select id="review-filter"><option value="pending">Pending</option><option value="all">All suggestions</option><option value="accepted">Applied</option><option value="rejected">Rejected</option></select></label>
+      <button class="btn btn-primary push" id="review-approve" type="button">Approve all pending</button>
+      <button class="btn btn-ghost" id="review-reject" type="button">Reject all pending</button>
+    </div>
+    <p id="review-info" class="subtle" role="status"></p>
+    <div class="twrap" id="review-wrap"><table class="review-table">
+      <thead><tr><th>Row</th><th>Suggestion</th><th>Original</th><th>Proposed</th><th>Decision</th></tr></thead>
+      <tbody id="review-body"></tbody></table></div>
+    <div class="pager" id="review-pager" style="margin-top:12px">
+      <button id="review-prev" type="button">Previous</button><span id="review-page"></span><button id="review-next" type="button">Next</button>
+    </div>
+  </div>
+</section>
+<section class="stage" id="validation" hidden>
+  <div class="stage-head"><h2>Validation &amp; recipes</h2></div>
+  <p class="lede">Check the current output against your requirements and reuse the same setup on another dataset.</p>
+  <div class="card">
+    <h3>Validation rules</h3>
+    <form class="check-form" id="validation-form">
+      <label class="field">Check<select id="validation-kind"><option value="required">Required value</option><option value="unique">Unique values</option><option value="range">Numeric range</option><option value="product">Product of two columns</option></select></label>
+      <label class="field">Column<select id="validation-column"></select></label>
+      <label class="field" id="v-a" hidden>First factor<select id="validation-a"></select></label>
+      <label class="field" id="v-b" hidden>Second factor<select id="validation-b"></select></label>
+      <label class="field" id="v-min" hidden>Minimum<input id="validation-min" type="number" step="any"></label>
+      <label class="field" id="v-max" hidden>Maximum<input id="validation-max" type="number" step="any"></label>
+      <button class="btn btn-primary" type="submit">Add check</button>
+    </form>
+    <p class="subtle" id="validation-message" role="status"></p>
+    <div id="validation-results"></div>
+  </div>
+  <div class="card">
+    <h3>Cleaning recipes</h3>
+    <p class="subtle">Reuse rules, column types, date order, validation checks, and approved typo mappings. Load the target dataset before importing a recipe.</p>
+    <div class="actions">
+      <label class="field">Ambiguous dates<select id="recipe-date"><option value="auto">Infer date order</option><option value="day">Day first</option><option value="month">Month first</option></select></label>
+      <button class="btn btn-primary" id="recipe-save" type="button">Download recipe</button>
+      <button class="btn btn-ghost" id="recipe-load" type="button">Import recipe</button>
+      <input id="recipe-file" type="file" accept=".json,application/json" hidden>
+    </div>
+    <p class="subtle" id="recipe-status" role="status"></p>
+  </div>
+</section>
+<section class="stage" id="retail" hidden>
+  <div class="stage-head"><h2>Retail sales dashboard</h2></div>
+  <p class="lede" id="retail-note">Charts use the current cleaned output.</p>
+  <div id="retail-content"></div>
+</section>
+<dialog id="edit-review" aria-labelledby="edit-title">
+  <form id="edit-form">
+    <h3 id="edit-title">Edit proposed value</h3><p class="subtle" id="edit-context"></p>
+    <label class="field">Replacement value<input id="edit-value"></label>
+    <p id="edit-error" class="subtle" role="status"></p>
+    <div class="actions"><button class="btn btn-ghost" type="button" id="edit-cancel">Cancel</button><button class="btn btn-primary" type="submit">Apply edit</button></div>
+  </form>
+</dialog>
+</main>
+</div>
+</div>
+<script>
+"use strict";
+/* ================= state ================= */
+const S = {
+  fileName:"", rawRows:[], header:[], types:[],          // raw data
+  cleaned:null, kept:null, changed:null, log:[],         // cleaning output
+  mappings:[], drops:null, colStats:null,                // per-run artifacts
+  rules:{}, view:"raw", page:0, search:"", histCol:null,
+  MAXROWS:25000
+};
+
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+const esc = v => String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+                 .replace(/"/g,"&quot;");
+const isNil = v => v === null || v === undefined || String(v).trim() === "";
+const fmtInt = v => v.toLocaleString("en-US");
+function svgEl(tag, attrs, parent){
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for(const k in attrs) el.setAttribute(k, attrs[k]);
+  if(parent) parent.appendChild(el);
+  return el;
+}
+function makeTip(box){
+  const tip = document.createElement("div");
+  tip.className = "tip"; box.appendChild(tip);
+  return {
+    show(html, x, y){ tip.innerHTML = html; tip.style.left = x+"px"; tip.style.top = y+"px"; tip.style.opacity = 1; },
+    hide(){ tip.style.opacity = 0; }
+  };
+}
+function levenshtein(a, b, max){
+  if(Math.abs(a.length-b.length) > max) return max+1;
+  const prev = new Array(b.length+1), cur = new Array(b.length+1);
+  for(let j=0;j<=b.length;j++) prev[j]=j;
+  for(let i=1;i<=a.length;i++){
+    cur[0]=i; let best=i;
+    for(let j=1;j<=b.length;j++){
+      cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1));
+      best=Math.min(best,cur[j]);
+    }
+    if(best>max) return max+1;
+    for(let j=0;j<=b.length;j++) prev[j]=cur[j];
+  }
+  return prev[b.length];
+}
+function median(arr){
+  const a = arr.filter(Number.isFinite).sort((x,y)=>x-y);
+  return a.length ? (a[Math.floor((a.length-1)/2)] + a[Math.ceil((a.length-1)/2)])/2 : NaN;
+}
+
+/* ================= CSV parser ================= */
+function parseCSV(text){
+  text = text.replace(/^\uFEFF/, "");
+  const first = text.slice(0, text.indexOf("\n") > -1 ? text.indexOf("\n") : text.length);
+  const counts = [[",",(first.match(/,/g)||[]).length],[";",(first.match(/;/g)||[]).length],
+                  ["\t",(first.match(/\t/g)||[]).length]];
+  counts.sort((a,b)=>b[1]-a[1]);
+  const d = counts[0][1] > 0 ? counts[0][0] : ",";
+  const rows = []; let row = [], cell = "", q = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i];
+    if(q){
+      if(c === '"'){ if(text[i+1] === '"'){ cell += '"'; i++; } else q = false; }
+      else cell += c;
+    } else if(c === '"'){ q = true; }
+    else if(c === d){ row.push(cell); cell = ""; }
+    else if(c === "\n"){ row.push(cell); rows.push(row); row = []; cell = ""; }
+    else if(c === "\r"){ /* skip */ }
+    else cell += c;
+  }
+  if(cell !== "" || row.length){ row.push(cell); rows.push(row); }
+  // drop fully-empty trailing rows
+  const data = rows.filter(r => r.length > 1 || (r.length === 1 && r[0].trim() !== ""));
+  return {rows:data, delimiter:d};
+}
+
+/* ================= type inference ================= */
+const DATE_RE = [
+  /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/,
+  /^\d{1,2}[-/.]\d{1,2}[-/.]\d{4}$/,
+  /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}[ T]\d{1,2}:\d{2}/,
+  /^\d{1,2}[- ]?[A-Za-z]{3,9}[- ]?\d{4}$/
+];
+const NUM_RE = /^[+-]?[$€£¥]?\s?[\d,]*\.?\d+\s?%?$/;
+function inferType(vals){
+  const filled = vals.filter(v => !isNil(v)).map(String);
+  if(!filled.length) return "empty";
+  const n = Math.min(filled.length, 400);
+  let dateHits = 0, numHits = 0;
+  for(let i=0;i<n;i++){
+    const v = filled[i].trim();
+    if(DATE_RE.some(r => r.test(v)) || /^[A-Za-z]{3} \d{1,2},? \d{4}$/.test(v)) dateHits++;
+    if(NUM_RE.test(v.replace(/\s/g,""))) numHits++;
+  }
+  if(dateHits/n >= 0.6) return "date";
+  if(numHits/n >= 0.7) return "numeric";
+  const uniq = new Set(filled.map(v=>v.trim().toLowerCase())).size;
+  const colUniq = new Set(filled).size;
+  if(colUniq === filled.length && filled.length > 20) return "id";
+  if(colUniq <= Math.max(25, filled.length*0.35)) return "category";
+  return "text";
+}
+
+/* ================= profiler ================= */
+function profile(header, rows){
+  return header.map((h,ci)=>{
+    const vals = rows.map(r=>r[ci]);
+    const filled = vals.filter(v=>!isNil(v));
+    const missing = vals.length - filled.length;
+    const distinct = new Set(filled.map(v=>String(v).trim())).size;
+    const uniq = new Set(filled).size;
+    const type = (uniq === filled.length && filled.length > 20) ? "id" : inferType(vals);
+    const samples = [...new Set(filled.slice(0,80).map(v=>String(v).trim()))].slice(0,3);
+    return {name:h, missing, total:vals.length, distinct, type, samples,
+            empty: filled.length === 0};
+  });
+}
+/* ================= rules ================= */
+const RULES = [
+  {id:"trim",     name:"Trim & normalize whitespace",   desc:"strip/collapse spaces, empty strings → missing", def:true},
+  {id:"dedupe",   name:"Remove exact duplicate rows",   desc:"identical rows after trimming (double submissions)", def:true},
+  {id:"dates",    name:"Unify date formats → ISO",      desc:"detects day-first vs month-first, month names, timestamps", def:true},
+  {id:"badDates", name:"Drop impossible / missing dates", desc:"2025-02-30 fails the calendar and is removed", def:true},
+  {id:"numeric",  name:"Coerce numeric text",           desc:"\"$1,200.50\", \"(45)\" → 1200.5, −45; junk → missing", def:true},
+  {id:"case",     name:"Standardize categorical casing", desc:"\"north\", \"NORTH\", \" North \" → one label", def:true},
+  {id:"typo",     name:"Merge category typos",          desc:"fuzzy (Levenshtein) match to dominant labels", def:true},
+  {id:"xfield",   name:"Cross-field consistency repair", desc:"finds B = A × C relations, rebuilds broken values", def:true},
+  {id:"slip",     name:"Repair decimal-slip outliers",   desc:"values ≈ 10×/100× the column median are rescaled", def:true},
+  {id:"imputeNum",name:"Impute missing numbers (median)", desc:"fills numeric gaps with the column median", def:true},
+  {id:"imputeCat",name:"Impute missing categories (mode)", desc:"fills category gaps with the most frequent label", def:true},
+  {id:"negatives",name:"Exclude negative rows (returns)", desc:"drops rare negative values in measure columns", def:true}
+];
+
+/* ================= date parsing ================= */
+const MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
+                january:1,february:2,march:3,april:4,august:8,september:9,october:10,november:11,december:12};
+function daysIn(y,m){ return new Date(y, m, 0).getDate(); }
+function parseDate(v, dayFirst){
+  const s = String(v).trim();
+  let m;
+  if((m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?$/))){
+    return iso(m[1],m[2],m[3]);
+  }
+  if((m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))){
+    const a = +m[1], b = +m[2];
+    if(a > 12 && b <= 12) return iso(m[3],m[2],m[1]);           // unambiguous day-first
+    if(b > 12 && a <= 12) return iso(m[3],m[1],m[2]);           // unambiguous month-first
+    return dayFirst ? iso(m[3],m[2],m[1]) : iso(m[3],m[1],m[2]);
+  }
+  if((m = s.match(/^(\d{1,2})[- ]([A-Za-z]{3,9})[- ](\d{4})$/)) && MONTHS[m[2].toLowerCase()])
+    return iso(m[3], MONTHS[m[2].toLowerCase()], m[1]);
+  if((m = s.match(/^([A-Za-z]{3,9}) (\d{1,2}),? (\d{4})$/)) && MONTHS[m[1].toLowerCase()])
+    return iso(m[3], MONTHS[m[1].toLowerCase()], m[2]);
+  return {recognized:false};
+  function iso(y,mo,d){ y=+y; mo=+mo; d=+d;
+    if(mo<1||mo>12||d<1||d>daysIn(y,mo)) return {recognized:true, valid:false};
+    return {recognized:true, valid:true, iso:`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`};
+  }
+}
+
+/* ================= cleaning engine ================= */
+function clean(header, rawRows, types, rulesOn, settings){
+  const n = header.length;
+  let cur = rawRows.map(r => r.slice(0, n).map(v => isNil(v) ? null : v));
+  const orig = cur.map(r => r.slice());
+  const kept = new Array(cur.length).fill(true);
+  const changed = cur.map(() => new Array(n).fill(false));
+  const changeLog = [], mappings = [], drops = [];
+  const log = [], suggestions = [];
+  const held = new Set(), removalKeys = new Set();
+  const {decisions,dateOrder,categoryMappings} = settings;
+  function suggest(p){
+    const key = fixKey(p), decision = decisions.get(key);
+    suggestions.push({...p,key,decision,index:suggestions.length});
+    return decision;
+  }
+  const idx = t => types.map((x,i)=>[x,i]).filter(p=>p[0]===t).map(p=>p[1]);
+  const dateCols = idx("date"), numCols = idx("numeric"), catCols = idx("category");
+  const relTargets = new Set();   // numeric cols already rebuilt via a B = A × C relation
+  // helper: set value + record
+  function setVal(ri, ci, val, rule){
+    const before = cur[ri][ci];
+    const cell = ri*n+ci;
+    if(before === val || held.has(cell)) return false;
+    if(reviewedRules.has(rule)){
+      const decision = suggest({row:ri,col:ci,before,after:val,rule});
+      if(decision?.action!=="accepted"){ held.add(cell); return false; }
+      if(decision.edited){ val=decision.value; held.add(cell); }
+    }
+    if(before === val) return false;
+    cur[ri][ci] = val; changed[ri][ci] = true;
+    changeLog.push({row:ri, col:ci, before, after:val, rule});
+    return true;
+  }
+  function dropRow(ri, rule, reason){
+    const removalKey=rule+":"+ri;
+    if(!kept[ri] || removalKeys.has(removalKey)) return false;
+    removalKeys.add(removalKey);
+    const decision=suggest({row:ri,col:null,before:reason,after:null,rule});
+    if(decision?.action!=="accepted") return false;
+    kept[ri] = false; drops.push({row:ri,rule,reason});
+    return true;
+  }
+  function rowsAlive(){ const out=[]; for(let i=0;i<cur.length;i++) if(kept[i]) out.push(i); return out; }
+
+  /* 1 · trim */
+  if(rulesOn.trim){
+    let hits = 0;
+    for(const ri of rowsAlive()) for(let ci=0;ci<n;ci++){
+      const v = cur[ri][ci];
+      if(v === null) continue;
+      const t = String(v).replace(/\s+/g," ").trim();
+      if(t === ""){ setVal(ri,ci,null,"trim"); hits++; }
+      else if(t !== String(v)){ setVal(ri,ci,t,"trim"); hits++; }
+    }
+    log.push({rule:"trim", action:"Trim & normalize whitespace", hits,
+      detail:"cells with stray spaces collapsed; blank strings → missing"});
+  }
+
+  /* 2 · dedupe */
+  if(rulesOn.dedupe){
+    const seen = new Map(); let hits = 0;
+    for(const ri of rowsAlive()){
+      const key = JSON.stringify(cur[ri]);
+      if(seen.has(key)){ if(dropRow(ri,"dedupe","Exact duplicate of source row "+(seen.get(key)+2))) hits++; }
+      else seen.set(key, ri);
+    }
+    log.push({rule:"dedupe", action:"Remove exact duplicate rows", hits,
+      detail:"identical rows removed (first occurrence kept)"});
+  }
+
+  /* 3 · dates */
+  const dayFirst = {};
+  if(rulesOn.dates){
+    let hits = 0, unrecognized = 0;
+    for(const ci of dateCols){
+      let ambigDay = 0, ambigMon = 0;
+      for(const ri of rowsAlive()){
+        const v = cur[ri][ci]; if(v === null) continue;
+        const m = String(v).trim().match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+        if(m){ if(+m[1] > 12) ambigDay++; else if(+m[2] > 12) ambigMon++; }
+      }
+      dayFirst[ci] = dateOrder==="auto" ? ambigDay>=ambigMon : dateOrder==="day";
+      for(const ri of rowsAlive()){
+        const v = cur[ri][ci]; if(v === null) continue;
+        const p = parseDate(v, dayFirst[ci]);
+        if(!p.recognized){ unrecognized++; continue; }
+        if(p.valid){
+          if(p.iso !== String(v) && setVal(ri,ci,p.iso,"dates")) hits++;
+        }
+        else if(setVal(ri,ci,null,"dates")) hits++;
+      }
+    }
+    log.push({rule:"dates", action:"Unify date formats → ISO YYYY-MM-DD", hits,
+      detail: hits ? `${hits} date cells parsed (day-first where detected); ${unrecognized} unrecognized left as-is` : "no date columns or no parseable values"});
+  }
+
+  /* 4 · bad dates */
+  if(rulesOn.badDates){
+    let hits = 0;
+    for(const ci of dateCols) for(const ri of rowsAlive()){
+      const v = cur[ri][ci];
+      if(v === null && !isNil(orig[ri][ci])){ if(dropRow(ri,"badDates","Impossible date ("+orig[ri][ci]+")")) hits++; }
+      else if(v === null){ if(dropRow(ri,"badDates","Missing date")) hits++; }
+    }
+    log.push({rule:"badDates", action:"Drop rows with impossible / missing dates", hits,
+      detail:"calendar-invalid dates (e.g. 2025-02-30) and blank dates"});
+  }
+
+  /* 5 · numeric coercion */
+  if(rulesOn.numeric){
+    let hits = 0, junk = 0;
+    for(const ci of numCols) for(const ri of rowsAlive()){
+      const v = cur[ri][ci]; if(v === null) continue;
+      let s = String(v).trim().replace(/^\((.*)\)$/,"-$1")
+                .replace(/[$€£¥%\s,]/g,"");
+      const num = Number(s);
+      if(s !== "" && Number.isFinite(num)){
+        if(s !== String(v).trim()){ setVal(ri,ci,num,"numeric"); hits++; }
+        else cur[ri][ci] = num;          // plain number: silent type normalization
+      } else if(s !== ""){ setVal(ri,ci,null,"numeric"); junk++; hits++; }
+    }
+    log.push({rule:"numeric", action:"Coerce numeric text to numbers", hits,
+      detail:`currency symbols / thousands separators stripped${junk ? ", "+junk+" unparseable → missing" : ""}`});
+  }
+
+  /* 6 · casing */
+  if(rulesOn.case){
+    let hits = 0;
+    for(const ci of catCols){
+      const alive = rowsAlive();
+      const freq = new Map();           // literal -> count
+      for(const ri of alive){ const v = cur[ri][ci]; if(v===null) continue;
+        const lit = String(v); freq.set(lit,(freq.get(lit)||0)+1); }
+      const canon = new Map();          // casefold -> most frequent literal
+      for(const [lit,c] of freq){
+        const k = lit.toLowerCase();
+        if(!canon.has(k) || freq.get(canon.get(k)) < c) canon.set(k, lit);
+      }
+      // unify the column's style: if any canonical label is capitalized, title-case them all
+      const cap = [...canon.values()].some(l =>
+        l.charAt(0) === l.charAt(0).toUpperCase() && l.charAt(0) !== l.charAt(0).toLowerCase());
+      if(cap){
+        const style = t => t.replace(/\S+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+        for(const [k,lit] of canon){ const s = style(lit); if(s !== lit) canon.set(k, s); }
+      }
+      for(const ri of alive){
+        const v = cur[ri][ci]; if(v===null) continue;
+        const c = canon.get(String(v).toLowerCase());
+        if(c !== undefined && c !== v){ setVal(ri,ci,c,"case"); hits++;
+          mappings.push({col:header[ci], from:String(v), to:c, rule:"casing"}); }
+      }
+    }
+    log.push({rule:"case", action:"Standardize categorical casing", hits,
+      detail:"one canonical label per case-insensitive group (most frequent variant wins)"});
+  }
+
+  /* 7 · fuzzy typos */
+  if(rulesOn.typo && categoryMappings.size){
+    let hits=0;
+    for(const ci of catCols) for(const ri of rowsAlive()){
+      const before=cur[ri][ci];
+      if(before===null) continue;
+      const value=categoryMappings.get(mapKey(header[ci],before));
+      if(value!==undefined && setVal(ri,ci,value,"recipe")){
+        held.add(ri*n+ci);
+        mappings.push({col:header[ci],from:String(before),to:value,rule:"recipe"});
+        hits++;
+      }
+    }
+    if(hits) log.push({rule:"recipe",action:"Apply saved category mappings",hits,detail:"Approved mappings from the imported recipe"});
+  }
+  if(rulesOn.typo){
+    let hits = 0;
+    for(const ci of catCols){
+      const alive = rowsAlive();
+      const filled = alive.filter(ri=>cur[ri][ci]!==null);
+      if(filled.length < 6) continue;
+      const freq = new Map();
+      for(const ri of filled){ const k = cur[ri][ci]; freq.set(k,(freq.get(k)||0)+1); }
+      const majorThresh = Math.max(2, filled.length*0.05);
+      const major = [...freq.entries()].filter(([k,c])=>c>=majorThresh).map(e=>e[0]);
+      if(major.length < 1) continue;
+      for(const ri of filled){
+        const v = cur[ri][ci];
+        if(freq.get(v) >= majorThresh) continue;
+        let best = null, bestScore = 0;
+        for(const m of major){
+          const d = levenshtein(String(v).toLowerCase(), String(m).toLowerCase(), 6);
+          const score = 1 - d/Math.max(String(v).length, String(m).length);
+          if(score > bestScore){ bestScore = score; best = m; }
+        }
+        if(best && bestScore >= 0.75 && best !== v && setVal(ri,ci,best,"typo")){
+          hits++;
+          mappings.push({col:header[ci],from:String(v),to:cur[ri][ci],rule:"typo"});
+        }
+      }
+    }
+    log.push({rule:"typo", action:"Merge category typos (fuzzy match)", hits,
+      detail:"rare labels matched to dominant ones at ≥ 75% similarity"});
+  }
+
+  /* 8 · cross-field repair */
+  if(rulesOn.xfield){
+    let fills = 0, fixes = 0, relDesc = [];
+    const alive = rowsAlive();
+    for(const B of numCols){
+      if(relDesc.some(r=>r.B===B)) continue;
+      let bestRel = null;
+      for(const A of numCols){ if(A===B) continue;
+        for(const C of numCols){ if(C===B||C===A) continue;
+          let ok = 0, tested = 0;
+          for(const ri of alive.slice(0,600)){
+            const a = cur[ri][A], c = cur[ri][C], b = cur[ri][B];
+            if(!Number.isFinite(a)||!Number.isFinite(c)||!Number.isFinite(b)) continue;
+            tested++; if(Math.abs(b - a*c) <= Math.max(0.02, 0.005*Math.abs(b))) ok++;
+          }
+          if(tested >= 3 && ok/tested >= 0.75 && (!bestRel || ok>bestRel.ok))
+            bestRel = {A, C, ok, tested};
+        }
+      }
+      if(!bestRel) continue;
+      relTargets.add(B);
+      relDesc.push({B, A:bestRel.A, C:bestRel.C});
+      const rel = bestRel;
+      const bVals = alive.map(ri=>cur[ri][B]).filter(Number.isFinite);
+      const medB = median(bVals);
+      const medA = median(alive.map(ri=>cur[ri][bestRel.A]).filter(Number.isFinite));
+      const medC = median(alive.map(ri=>cur[ri][bestRel.C]).filter(Number.isFinite));
+      for(const ri of alive){
+        const a = cur[ri][bestRel.A], c = cur[ri][bestRel.C], b = cur[ri][B];
+        if(Number.isFinite(a) && Number.isFinite(c)){
+          const prod = Math.round(a*c*100)/100;
+          if(b === null || b === ""){ if(setVal(ri,B,prod,"xfield")) fills++; continue; }
+          let fixed = false;
+          if(Number.isFinite(b) && medB > 0){
+            const ratio = b/medB;
+            if(ratio >= 6 || ratio <= 1/6){
+              const cand = Math.round(b*100* (ratio>=6?0.1:10))/100;
+              if(Math.abs(cand - prod) <= Math.max(0.02, 0.005*Math.abs(prod))){
+                if(setVal(ri,B,cand,"xfield")) fixes++;
+                fixed = true;
+              }
+            }
+          }
+          // decimal slip inside the relation: the outlier factor column is rescaled
+          if(!fixed && Number.isFinite(b)){
+            const qA = c !== 0 ? b/c : NaN;   // implied A if C is trustworthy
+            const qC = a !== 0 ? b/a : NaN;   // implied C if A is trustworthy
+            const slip = (v, med, q) => Number.isFinite(q) && q > 0 && med > 0 &&
+              v/med >= 6 && Math.abs(v/q - 10) < 0.02;
+            if(slip(a, medA, qA)){ if(setVal(ri,bestRel.A,Math.round(qA*100)/100,"xfield")) fixes++; }
+            else if(slip(c, medC, qC)){ if(setVal(ri,bestRel.C,Math.round(qC*100)/100,"xfield")) fixes++; }
+          }
+        } else if(Number.isFinite(a) && Number.isFinite(b) && medC > 0){
+          const imp = b/a;                    // missing C rebuilt from B / A
+          if(imp > 0 && imp/medC >= 1/6 && imp/medC <= 6){
+            if(setVal(ri,bestRel.C,Math.round(imp*100)/100,"xfield")) fills++;
+          }
+        } else if(Number.isFinite(b) && Number.isFinite(c) && c !== 0 && medA > 0){
+          const q = b/c;                      // missing A rebuilt from B / C
+          if(q > 0 && q/medA >= 1/6 && q/medA <= 6){
+            if(setVal(ri,bestRel.A,Math.round(q*100)/100,"xfield")) fills++;
+          }
+        }
+      }
+      relDesc.push({text:`${header[bestRel.A]} × ${header[bestRel.C]} → ${header[B]}`});
+    }
+    log.push({rule:"xfield", action:"Cross-field consistency repair", hits:fills+fixes,
+      detail: relDesc.filter(r=>r.text).map(r=>r.text).join("; ") + (relDesc.length?`   ${fills} missing rebuilt, ${fixes} outliers recovered`:"no reliable product relation found")});
+  }
+
+  /* 9 · decimal slips */
+  if(rulesOn.slip){
+    let hits = 0;
+    for(const ci of numCols){
+      if(relTargets.has(ci)) continue;   // relation repair already handled this column
+      const alive = rowsAlive();
+      const vals = alive.map(ri=>cur[ri][ci]).filter(Number.isFinite);
+      const med = median(vals);
+      if(!Number.isFinite(med) || med <= 0) continue;
+      const lows = vals.filter(v=>v <= med/8), highs = vals.filter(v=>v >= 8*med);
+      if(lows.length > vals.length*0.05) continue;      // small tail too big → legitimate, not slips
+      if((lows.length+highs.length) > vals.length*0.15) continue;
+      for(const ri of alive){
+        const v = cur[ri][ci];
+        if(!Number.isFinite(v)) continue;
+        const k = v/med;
+        let cand = null;
+        if(k >= 8 && k <= 12) cand = v/10;
+        else if(k >= 80 && k <= 120) cand = v/100;
+        else if(k >= 1/12 && k <= 1/8) cand = v*10;
+        if(cand === null) continue;
+        cand = Math.round(cand*100)/100;
+        if(Math.abs(cand - med) <= med*4 && setVal(ri,ci,cand,"slip")) hits++;
+      }
+    }
+    log.push({rule:"slip", action:"Repair decimal-slip outliers", hits,
+      detail:"≈10×/100× median values rescaled (guarded: ≤15% of column)"});
+  }
+
+  /* 10 · impute numeric */
+  if(rulesOn.imputeNum){
+    let hits = 0;
+    for(const ci of numCols){
+      const med = median(rowsAlive().map(ri=>cur[ri][ci]).filter(Number.isFinite));
+      if(!Number.isFinite(med)) continue;
+      for(const ri of rowsAlive()){
+        if(cur[ri][ci] === null && setVal(ri,ci,med,"imputeNum")) hits++;
+      }
+    }
+    log.push({rule:"imputeNum", action:"Impute missing numbers with median", hits,
+      detail:"median is robust to the outliers other rules just fixed"});
+  }
+
+  /* 11 · impute category */
+  if(rulesOn.imputeCat){
+    let hits = 0;
+    for(const ci of catCols){
+      const freq = new Map();
+      for(const ri of rowsAlive()){ const v = cur[ri][ci];
+        if(v !== null) freq.set(v,(freq.get(v)||0)+1); }
+      let mode = null, mc = 0;
+      for(const [k,c] of freq) if(c > mc){ mc = c; mode = k; }
+      if(mode === null) continue;
+      for(const ri of rowsAlive()){
+        if(cur[ri][ci] === null && setVal(ri,ci,mode,"imputeCat")) hits++;
+      }
+    }
+    log.push({rule:"imputeCat", action:"Impute missing categories with mode", hits,
+      detail:"most frequent label used for gaps"});
+  }
+
+  /* 12 · negatives */
+  if(rulesOn.negatives){
+    let hits = 0, keptSigned = [];
+    for(const ci of numCols){
+      const alive = rowsAlive();
+      const filled = alive.map(ri=>cur[ri][ci]).filter(Number.isFinite);
+      const negs = filled.filter(v=>v < 0);
+      const rare = filled.length >= 30 ? negs.length/filled.length < 0.05
+                                       : negs.length/filled.length < 0.25;
+      if(negs.length > 0 && rare){
+        for(const ri of alive) if(Number.isFinite(cur[ri][ci]) && cur[ri][ci] < 0){
+          if(dropRow(ri,"negatives","Negative value in "+header[ci]+" ("+cur[ri][ci]+")")) hits++;
+        }
+      } else if(negs.length > 0) keptSigned.push(header[ci]+" ("+negs.length+")");
+    }
+    log.push({rule:"negatives", action:"Exclude negative rows (returns)", hits,
+      detail: hits ? "rare negatives treated as returns/errors" :
+              keptSigned.length ? "negatives frequent in "+keptSigned.join(", ")+"   kept (may be legitimate)" : "none found"});
+  }
+
+  /* final stats */
+  const finalIdx = [];
+  for(let i=0;i<cur.length;i++) if(kept[i]) finalIdx.push(i);
+  const cleanedRows = finalIdx.map(ri => { const r = cur[ri].slice(); r._i = ri; return r; });
+  const beforeStats = profile(header, rawRows);
+  const afterRows = finalIdx.map(ri => cur[ri]);
+  const afterStats = profile(header, afterRows);
+  const missBefore = beforeStats.reduce((s,c)=>s+c.missing,0);
+  const missAfter = afterStats.reduce((s,c)=>s+c.missing,0);
+  const dupBefore = rawRows.length - new Set(rawRows.map(r=>JSON.stringify(r.slice(0,n)))).size;
+  const distinctBefore = catCols.reduce((s,ci)=>s+beforeStats[ci].distinct,0);
+  const distinctAfter = catCols.reduce((s,ci)=>s+afterStats[ci].distinct,0);
+
+  return {header, cur, orig, kept, changed, changeLog, mappings, drops, log, suggestions, dayFirst,
+          keptRows:finalIdx, cleanedRows, beforeStats, afterStats,
+          kpis:{rowsBefore:rawRows.length, rowsAfter:finalIdx.length,
+                missBefore, missAfter, cellsChanged:changeLog.length,
+                dupBefore, distinctBefore, distinctAfter}};
+}
+/* ================= demo dataset generator ================= */
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296; }; }
+function makeDemo(){
+  const rnd = mulberry32(20251119);
+  const pick = w => { let s=rnd()*w.reduce((a,b)=>a+b,0);
+    for(let i=0;i<w.length;i++){ if(s<w[i]) return i; s-=w[i]; } return w.length-1; };
+  const CATS = ["Electronics","Home & Kitchen","Clothing","Sports","Beauty"];
+  const CATW = [30,25,18,15,12];
+  const PRICE = [[120,900],[40,260],[25,120],[30,180],[15,80]];
+  const REGIONS = ["North","West","South","East"];
+  const REGW = [30,25,25,20];
+  const MW = [0.6,1.8,0.7,1.1,1.0,1.1,0.8,1.4,1.8,2.0,1.6,1.4];
+  const rows = [], truth = []; let id = 0;
+  for(let i=0;i<420;i++){
+    id++;
+    const mon = pick(MW), day = 1+Math.floor(rnd()*28);
+    const cat = pick(CATW), reg = pick(REGW);
+    const units = 1+Math.floor(rnd()*rnd()*10);
+    const price = +(PRICE[cat][0] + rnd()*(PRICE[cat][1]-PRICE[cat][0])).toFixed(2);
+    const rev = +(units*price).toFixed(2);
+    const iso = `${2025}-${String(mon+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    const date = rnd() < 0.2 ? `${String(day).padStart(2,"0")}/${String(mon+1).padStart(2,"0")}/2025` : iso;
+    truth.push(["NM-2025-"+String(id).padStart(5,"0"),iso,CATS[cat],REGIONS[reg],units,price,rev]);
+    rows.push([`NM-2025-${String(id).padStart(5,"0")}`, date, CATS[cat], REGIONS[reg], units, price, rev]);
+  }
+  const inject = (n, fn) => { for(let k=0;k<n;k++){ const r = rows[Math.floor(rnd()*rows.length)]; fn(r); } };
+  inject(8, r => { r[2] = ["Electroncs","Beuty","Clothng","Sportss"][Math.floor(rnd()*4)]; });           // typos
+  inject(10, r => { const v = r[3].toLowerCase(); r[3] = rnd()<.5 ? " "+v+" " : v.toUpperCase(); });     // region mess
+  inject(10, r => { r[4] = ""; });                                                                       // missing units
+  inject(8,  r => { r[3] = ""; });                                                                       // missing region
+  inject(6,  r => { r[6] = ""; });                                                                       // missing revenue
+  inject(4,  r => { const clean=truth[rows.indexOf(r)]; r[4]=clean[4]=-(1+Math.floor(rnd()*3)); r[6]=clean[6]=+(r[4]*r[5]).toFixed(2); });                     // returns
+  inject(4,  r => { r[1] = ["2025-02-30","2025-04-31","2025-06-31","2025-11-31"][Math.floor(rnd()*4)]; });// impossible dates
+  inject(3,  r => { r[5] = +(r[5]*10).toFixed(2); });                                                    // price slips
+  inject(6,  r => { r[6] = +(r[6]*1.8).toFixed(2); });                                                   // revenue overwrites
+  for(let k=0;k<6;k++) rows.push(rows[Math.floor(rnd()*rows.length)].slice());                           // exact dupes
+  return {header:["Order_ID","Date","Category","Region","Units_Sold","Unit_Price","Revenue"], rows, truth};
+}
+
+/* ================= file loading ================= */
+function showMsg(message, cls=""){
+  const target=$("#upload-msg");
+  target.replaceChildren();
+  if(!message) return;
+  const banner=document.createElement("div");
+  banner.className="banner "+cls;
+  banner.textContent=message;
+  target.append(banner);
+}
+function loadTable(name, header, rows, note, truth=null){
+  S.truth=truth;
+  S.fileName = name;
+  S.header = header;
+  S.rawRows = rows.map(r => { const out = header.map((_,i)=> isNil(r[i]) ? null : r[i]); return out; });
+  const inferred = profile(header, S.rawRows);
+  S.typesInferred = inferred.map(c=>c.type);
+  S.types = S.typesInferred.slice();
+  S.typeOv = {};
+  S.rules = {}; RULES.forEach(r => S.rules[r.id] = r.def);
+  S.view = "raw"; S.page = 0; S.search = ""; S.histCol = null;
+  $("#fs-name").textContent = name;
+  $("#workspace-filename").textContent = name;
+  $("#workspace-filename").title = name;
+  $("#workspace-filename").hidden = false;
+  $("#fs-meta").textContent = `${fmtInt(rows.length)} rows × ${header.length} columns` + (note ? " · " + note : "");
+  startDataset();
+  $("#loaded-area").classList.remove("hidden");
+  $("#top-export").hidden=$("#results-label").hidden=false;
+  document.querySelectorAll("#chips .chip").forEach(c=>c.hidden=false);
+  runPipeline();
+  openPanel("review");
+}
+function readFile(file){
+  if(!file) return;
+  openPanel("upload");
+  showMsg("");
+  const request=S.uploadRequest=(S.uploadRequest||0)+1;
+  if(file.size > 30*1024*1024){ showMsg("File is larger than 30 MB   please split it first.","error"); return; }
+  const rd = new FileReader();
+  rd.onerror = () => { if(request===S.uploadRequest) showMsg("Could not read that file.","error"); };
+  rd.onload = () => {
+    if(request!==S.uploadRequest) return;
+    try{
+      const {rows} = parseCSV(String(rd.result));
+      if(rows.length < 2){ showMsg("Need a header row plus at least one data row.","error"); return; }
+      const used=new Set();
+      const header=rows[0].map((h,i)=>{
+        const base=String(h).trim() || "column_"+(i+1);
+        let name=base, suffix=2;
+        while(used.has(name)) name=base+" ("+(suffix++)+")";
+        used.add(name);
+        return name;
+      });
+      let data = rows.slice(1);
+      let note = "";
+      if(data.length > S.MAXROWS){ note = `showing first ${fmtInt(S.MAXROWS)} of ${fmtInt(data.length)} rows`; data = data.slice(0, S.MAXROWS); }
+      loadTable(file.name, header, data, note);
+    }catch(e){ showMsg("Parse failed: "+e.message,"error"); }
+  };
+  rd.readAsText(file);
+}
+
+/* ================= pipeline run ================= */
+function runPipeline(){
+  S.types = S.typesInferred.map((t,i)=> S.typeOv[i] || t);
+  const t0 = performance.now();
+  const res = clean(S.header,S.rawRows,S.types,S.rules,S);
+  res.elapsed = Math.round(performance.now()-t0);
+  S.result = res;
+  if(S.histCol === null || !S.types[S.histCol] || S.types[S.histCol] !== "numeric"){
+    const ni = S.types.indexOf("numeric"); S.histCol = ni >= 0 ? ni : null;
+  }
+  renderProfile(); renderRules(); renderReport(); renderRows();
+  if(S.panel==="charts") renderCharts();
+  renderReview(); renderValidation(); renderRetail(); renderBenchmark();
+}
+
+/* ================= renderers ================= */
+const TYPE_PILL = {
+  id:'<span class="pill keep">identifier</span>',
+  date:'<span class="pill keep">date</span>',
+  numeric:'<span class="pill fix">numeric</span>',
+  category:'<span class="pill warn">category</span>',
+  text:'<span class="pill" style="background:#eef1f3;color:#6f7578">text</span>',
+  empty:'<span class="pill drop">empty</span>'
+};
+function kpiCard(v, label, delta){
+  return `<div class="kpi"><b>${v}</b><span>${label}${delta ? " · " + delta : ""}</span></div>`;
+}
+function renderProfile(){
+  const p = S.result.beforeStats, k = S.result.kpis;
+  $("#profile-kpis").innerHTML =
+    kpiCard(fmtInt(k.rowsBefore),"rows loaded") +
+    kpiCard(fmtInt(S.header.length),"columns") +
+    kpiCard(fmtInt(k.missBefore),"missing cells",
+      (100*k.missBefore/Math.max(1,k.rowsBefore*S.header.length)).toFixed(1)+"% of table") +
+    kpiCard(fmtInt(k.dupBefore),"exact duplicate rows") +
+    kpiCard(fmtInt(k.distinctBefore),"distinct category labels") +
+    kpiCard(fmtInt(S.types.filter(t=>t==="date").length),"date columns · "+
+      S.types.filter(t=>t==="numeric").length+" numeric");
+  const tb = $("#profile-table tbody"); tb.innerHTML = "";
+  p.forEach((c,ci)=>{
+    const cur = S.typeOv[ci] || "";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><b>${esc(c.name)}</b></td>
+      <td><select data-ci="${ci}" aria-label="Type for ${esc(c.name)}">
+        <option value=""${cur===""?" selected":""}>auto (${c.type})</option>
+        ${["id","date","numeric","category","text"].map(t=>
+          `<option value="${t}"${cur===t?" selected":""}>${t}</option>`).join("")}
+      </select></td>
+      <td class="num">${fmtInt(c.missing)} <span style="color:var(--muted)">(${(100*c.missing/Math.max(1,c.total)).toFixed(1)}%)</span></td>
+      <td class="num">${fmtInt(c.distinct)}</td>
+      <td class="mono" style="color:var(--muted)">${esc(c.samples.join(" · ").slice(0,60))}</td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll("select").forEach(sel => sel.addEventListener("change", e=>{
+    const ci = +e.target.dataset.ci;
+    if(e.target.value === "") delete S.typeOv[ci]; else S.typeOv[ci] = e.target.value;
+    runPipeline();
+  }));
+}
+function renderRules(){
+  const hits = {}; S.result.log.forEach(l => hits[l.rule] = l.hits);
+  const grid = $("#rules-grid");
+  grid.innerHTML = RULES.map(r=>`
+    <div class="rule">
+      <label class="switch"><input type="checkbox" data-rule="${r.id}" ${S.rules[r.id]?"checked":""}>
+        <span class="slider"></span></label>
+      <div class="rt"><b>${r.name}</b><span>${r.desc}</span></div>
+      <div class="hit" id="hit-${r.id}"></div>
+    </div>`).join("");
+  grid.querySelectorAll("input[type=checkbox]").forEach(cb => cb.addEventListener("change", e=>{
+    S.rules[e.target.dataset.rule] = e.target.checked;
+    runPipeline();
+  }));
+  RULES.forEach(r=>{
+    const h = hits[r.id] || 0;
+    $("#hit-"+r.id).innerHTML = h ? `<span class="pill fix">${fmtInt(h)}</span>` : `<span class="pill" style="background:#eef1f3;color:#6f7578">0</span>`;
+  });
+}
+function renderReport(){
+  const r = S.result, k = r.kpis;
+  const pct = (100*k.rowsAfter/Math.max(1,k.rowsBefore)).toFixed(1);
+  $("#result-kpis").innerHTML =
+    kpiCard(fmtInt(k.rowsAfter),"rows kept · "+pct+"%",
+      `−${fmtInt(k.rowsBefore-k.rowsAfter)} removed`) +
+    kpiCard(fmtInt(k.missAfter),"missing cells after",
+      `−${fmtInt(k.missBefore-k.missAfter)}`) +
+    kpiCard(fmtInt(k.cellsChanged),"cells repaired",
+      r.elapsed+" ms pipeline") +
+    kpiCard(fmtInt(k.dupBefore),"duplicates removed") +
+    kpiCard(fmtInt(k.distinctAfter),"distinct category labels",
+      k.distinctBefore!==k.distinctAfter ? `was ${fmtInt(k.distinctBefore)}` : "");
+  $("#clean-log").innerHTML = r.log.map((l,i)=>`
+    <li class="${l.hits ? "" : "none"}"><span class="sn">${i+1}</span>
+      <span class="sa">${esc(l.action)}<small>${esc(l.detail)}</small></span>
+      <span class="sc">${l.hits ? fmtInt(l.hits) : "0"}</span></li>`).join("");
+  const agg = new Map();
+  S.result.mappings.forEach(m=>{
+    const key = m.col+"|"+m.from+"|"+m.to;
+    const e = agg.get(key) || {col:m.col, from:m.from, to:m.to, n:0};
+    e.n++; agg.set(key,e);
+  });
+  const mapRows = [...agg.values()].sort((a,b)=>b.n-a.n).slice(0,60);
+  $("#map-table tbody").innerHTML = mapRows.map(m=>`
+    <tr><td>${esc(m.col)}</td><td class="mono" style="color:var(--bad)">${esc(m.from)}</td>
+    <td class="mono" style="color:var(--ok)">${esc(m.to)}</td><td class="num">${m.n}</td></tr>`).join("")
+    || `<tr><td colspan="4" style="color:var(--muted)">No label rewrites were needed.</td></tr>`;
+  const perColChanged = {}; r.changeLog.forEach(c => perColChanged[c.col] = (perColChanged[c.col]||0)+1);
+  $("#movement-table tbody").innerHTML = S.header.map((h,ci)=>{
+    const b = r.beforeStats[ci], a = r.afterStats[ci];
+    const ch = perColChanged[ci] || 0;
+    return `<tr><td><b>${esc(h)}</b></td><td>${TYPE_PILL[S.types[ci]]||S.types[ci]}</td>
+      <td class="num">${ch ? '<span class="pill fix">'+fmtInt(ch)+'</span>' : "0"}</td>
+      <td class="num">${fmtInt(b.missing)} → <b>${fmtInt(a.missing)}</b></td>
+      <td class="num">${fmtInt(b.distinct)} → <b>${fmtInt(a.distinct)}</b></td></tr>`;
+  }).join("");
+}
+/* ================= charts ================= */
+const GRID = "rgba(111,117,120,.25)", TICK = "#6f7578", BAR_GRAY = "#c2cdd2";
+
+function chartFixes(){
+  const box = $("#chart-fixes"); box.innerHTML = "";
+  const data = S.result.log.filter(l=>l.hits>0).sort((a,b)=>b.hits-a.hits);
+  if(!data.length){ box.innerHTML = '<p style="color:var(--muted);font-size:.9rem">No applied changes to chart.</p>'; return; }
+  const W = box.clientWidth || 320, H = data.length*34+14;
+  const svg = svgEl("svg", {width:W, height:H, role:"img", "aria-label":"Fixes by rule"}, box);
+  const L = Math.min(230, W*0.42), R = 8, iw = W-L-R, max = data[0].hits;
+  const tip = makeTip(box);
+  data.forEach((d,i)=>{
+    const y = 8+i*34, bh = 20, w = Math.max(4, iw*d.hits/max);
+    const g = svgEl("g", {class:"bar"}, svg);
+    svgEl("rect", {x:L, y, width:w, height:bh, rx:4, fill: i===0 ? "#2448d8" : BAR_GRAY}, g);
+    svgEl("text", {x:L-8, y:y+bh/2+4, "text-anchor":"end", "font-size":11, fill:"#1a1b1c"}, g)
+      .textContent = d.action.length > 30 ? d.action.slice(0,29)+"…" : d.action;
+    let lx = L+w+8, anchor = "start", fill = "#334650";
+    if(lx+40 > W){ lx = L+w-7; anchor = "end"; fill = i===0 ? "#fff" : "#1a1b1c"; }
+    svgEl("text", {x:lx, y:y+bh/2+4, "text-anchor":anchor, "font-size":11, "font-weight":700, fill}, g)
+      .textContent = fmtInt(d.hits);
+    g.addEventListener("mousemove", e=>{ const r = box.getBoundingClientRect();
+      tip.show(`<b>${esc(d.action)}</b><br>${fmtInt(d.hits)} rows · ${esc(d.detail)}`, e.clientX-r.left, e.clientY-r.top); });
+    g.addEventListener("mouseleave", tip.hide);
+  });
+}
+
+function groupedBars(box, items, label){
+  box.innerHTML = "";
+  if(!items.length){ box.innerHTML = `<p style="color:var(--muted);font-size:.9rem">${label}</p>`; return; }
+  const W = box.clientWidth || 320, H = items.length*30+16;
+  const svg = svgEl("svg", {width:W, height:H, role:"img", "aria-label":label}, box);
+  const L = Math.min(170, W*0.4), R = 8, iw = W-L-R, max = Math.max(1, ...items.map(d=>Math.max(d.b,d.a)));
+  const tip = makeTip(box);
+  items.forEach((d,i)=>{
+    const y0 = 8+i*30, bh = 10;
+    const g = svgEl("g", {class:"bar"}, svg);
+    svgEl("text", {x:L-8, y:y0+bh+3, "text-anchor":"end", "font-size":11, fill:"#1a1b1c"}, g)
+      .textContent = d.name.length > 22 ? d.name.slice(0,21)+"…" : d.name;
+    const scale = v => Math.max(v > 0 ? 2 : 0, iw*v/max);
+    svgEl("rect", {x:L, y:y0, width:scale(d.b), height:bh, rx:3, fill:BAR_GRAY}, g);
+    svgEl("rect", {x:L, y:y0+bh+2, width:scale(d.a), height:bh, rx:3, fill:"#2448d8"}, g);
+    svgEl("text", {x:L+scale(d.b)+6, y:y0+bh, "font-size":10, fill:"#6f7578"}, g).textContent = d.b;
+    svgEl("text", {x:L+scale(d.a)+6, y:y0+2*bh+2, "font-size":10, "font-weight":700, fill:"#2448d8"}, g).textContent = d.a;
+    g.addEventListener("mousemove", e=>{ const r = box.getBoundingClientRect();
+      tip.show(`<b>${esc(d.name)}</b><br>before ${d.b} · after <b>${d.a}</b>`, e.clientX-r.left, e.clientY-r.top); });
+    g.addEventListener("mouseleave", tip.hide);
+  });
+}
+function chartMissing(){
+  groupedBars($("#chart-missing"),
+    S.header.map((h,ci)=>({name:h, b:S.result.beforeStats[ci].missing, a:S.result.afterStats[ci].missing}))
+      .filter(d=>d.b > 0 || d.a > 0),
+    "No missing values in any column   impressive file.");
+}
+function chartDistinct(){
+  groupedBars($("#chart-distinct"),
+    S.header.map((h,ci)=>({name:h, b:S.result.beforeStats[ci].distinct, a:S.result.afterStats[ci].distinct}))
+      .filter((d,ci)=>S.types[ci]==="category" && (d.b > 0 || d.a > 0)),
+    "No category columns detected.");
+}
+function chartHist(){
+  const box = $("#chart-hist"); box.innerHTML = "";
+  const ci = S.histCol;
+  if(ci === null){ box.innerHTML = '<p style="color:var(--muted);font-size:.9rem">No numeric column detected.</p>'; return; }
+  const rawVals = S.rawRows.map(r=>Number(String(r[ci]).replace(/[$€£¥%\s,]/g,""))).filter(Number.isFinite);
+  const cleanVals = S.result.keptRows.map(ri=>S.result.cur[ri][ci]).filter(Number.isFinite);
+  if(cleanVals.length < 5){ box.innerHTML = '<p style="color:var(--muted);font-size:.9rem">Not enough numeric data.</p>'; return; }
+  const sorted = cleanVals.slice().sort((a,b)=>a-b);
+  const lo = sorted[Math.floor(sorted.length*0.02)], hi = sorted[Math.ceil(sorted.length*0.98)-1];
+  const span = (hi-lo) || 1;
+  const bins = 18, before = new Array(bins).fill(0), after = new Array(bins).fill(0);
+  rawVals.forEach(v=>{ const b = Math.min(bins-1, Math.max(0, Math.floor((v-lo)/span*bins))); before[b]++; });
+  cleanVals.forEach(v=>{ if(v<lo||v>hi) return; const b = Math.min(bins-1, Math.floor((v-lo)/span*bins)); after[b]++; });
+  const W = box.clientWidth || 320, H = 250, L = 40, R = 10, T = 12, B = 26, iw = W-L-R, ih = H-T-B;
+  const svg = svgEl("svg", {width:W, height:H, role:"img", "aria-label":"Histogram before vs after"}, box);
+  const ymax = Math.max(1, ...before, ...after), Y = v => T + ih*(1 - v/ymax), X = b => L + iw*b/bins;
+  for(const g of [0, .5, 1]){
+    const val = Math.round(ymax*g);
+    svgEl("line", {x1:L, x2:W-R, y1:Y(val), y2:Y(val), stroke:GRID, "stroke-dasharray":"3 4"}, svg);
+    svgEl("text", {x:L-6, y:Y(val)+3.5, "text-anchor":"end", "font-size":10.5, fill:TICK}, svg).textContent = val;
+  }
+  const stepTxt = span/bins, fmtV = v => Math.abs(v) >= 1000 ? (v/1000).toFixed(1)+"k" : +v.toFixed(2);
+  for(let b=0;b<bins;b+=Math.ceil(bins/6))
+    svgEl("text", {x:X(b), y:H-8, "text-anchor":"middle", "font-size":10, fill:TICK}, svg)
+      .textContent = fmtV(lo+b*stepTxt);
+  const area = (arr, color, dash) => {
+    let d = "M"+L+","+Y(0);
+    arr.forEach((v,b)=>{ d += ` L${X(b)},${Y(v)} L${X(b+1)},${Y(v)}`; });
+    d += ` L${X(bins)},${Y(0)} Z`;
+    svgEl("path", {d, fill:color+"55", stroke:color, "stroke-width":1.6, ...(dash?{"stroke-dasharray":dash}:{})}, svg);
+  };
+  area(before, "#8fa6b0", "4 3");
+  area(after, "#2448d8");
+  const tip = makeTip(box);
+  const overlay = svgEl("rect", {x:L, y:T, width:iw, height:ih, fill:"transparent"}, svg);
+  overlay.addEventListener("mousemove", e=>{
+    const r = box.getBoundingClientRect(), px = e.clientX-r.left;
+    const b = Math.max(0, Math.min(bins-1, Math.floor((px-L)/iw*bins)));
+    tip.show(`<b>${fmtV(lo+b*stepTxt)} – ${fmtV(lo+(b+1)*stepTxt)}</b><br>raw: ${before[b]} · cleaned: <b>${after[b]}</b>`, X(b)+iw/bins/2, Y(Math.max(before[b],after[b]))-4);
+  });
+  overlay.addEventListener("mouseleave", tip.hide);
+}
+function fillHistSelect(){
+  const sel = $("#hist-col"); sel.innerHTML = "";
+  S.header.forEach((h,ci)=>{
+    if(S.types[ci] === "numeric"){
+      const o = document.createElement("option");
+      o.value = ci; o.textContent = h;
+      if(ci === S.histCol) o.selected = true;
+      sel.appendChild(o);
+    }
+  });
+  sel.classList.toggle("hidden", !sel.children.length);
+}
+function renderCharts(){
+  chartFixes();
+  chartMissing();
+  chartDistinct();
+  fillHistSelect();
+  chartHist();
+}
+/* ================= row browser ================= */
+const PAGE = 50;
+function rowIndices(){
+  const q = S.search.trim().toLowerCase();
+  const all = [];
+  for(let i=0;i<S.rawRows.length;i++){
+    if(q){
+      let hit = false;
+      for(let ci=0;ci<S.header.length && !hit;ci++){
+        const raw = String(S.rawRows[i][ci] ?? ""), cln = String(S.result.cur[i][ci] ?? "");
+        hit = raw.toLowerCase().includes(q) || cln.toLowerCase().includes(q);
+      }
+      if(!hit) continue;
+    }
+    all.push(i);
+  }
+  return all;
+}
+function renderRows(){
+  const r = S.result, thead = $("#rows-table thead"), tbody = $("#rows-table tbody");
+  const keepSel = new Set(r.keptRows);
+  const dropByRow = {}; r.drops.forEach(d => dropByRow[d.row] = d);
+  const chByRow = {}; r.changeLog.forEach(c => { (chByRow[c.row] ||= {})[c.col] = c; });
+  const indices = rowIndices();
+  const pages = Math.max(1, Math.ceil(indices.length/PAGE));
+  if(S.page >= pages) S.page = pages-1;
+  const start = S.page*PAGE, slice = indices.slice(start, start+PAGE);
+  thead.innerHTML = "<tr>" + S.header.map(h=>`<th>${esc(h)}</th>`).join("") +
+    (S.view === "clean" ? "<th>Status</th>" : "") + "</tr>";
+  tbody.innerHTML = slice.map(ri => {
+    const dropped = !keepSel.has(ri);
+    const cells = S.header.map((h,ci)=>{
+      const v = S.view === "clean" ? r.cur[ri][ci] : S.rawRows[ri][ci];
+      const was = chByRow[ri] && chByRow[ri][ci];
+      const tt = was ? ` title="was: ${esc(was.before === null ? "(missing)" : was.before)}"` : "";
+      return `<td class="${S.view==="clean" && was ? "changed" : ""}${dropped ? " dropped" : ""}"${tt}>${v === null ? '<span style="color:var(--line2)"> </span>' : esc(v)}</td>`;
+    }).join("");
+    const status = S.view === "clean"
+      ? `<td>${dropped ? `<span class="pill drop" title="${esc(dropByRow[ri]?.reason||"")}">dropped</span>`
+                        : '<span class="pill fix">kept</span>'}</td>` : "";
+    return `<tr${S.view==="clean" && dropped ? ' class="dropr"' : ""}>${cells}${status}</tr>`;
+  }).join("") || `<tr><td colspan="${S.header.length}" style="color:var(--muted)">No rows match “${esc(S.search)}”.</td></tr>`;
+  $("#pg-label").textContent = indices.length
+    ? `rows ${fmtInt(start+1)}–${fmtInt(Math.min(start+PAGE, indices.length))} of ${fmtInt(indices.length)}`
+    : "no rows";
+  $("#pg-prev").disabled = S.page === 0;
+  $("#pg-next").disabled = S.page >= pages-1;
+  $("#rows-msg").textContent = S.view === "clean"
+    ? "Highlighted cells were repaired   hover for the original value. Greyed rows were removed by the pipeline."
+    : "Raw values exactly as uploaded.";
+}
+//ROWS-EXTRA
+
+/* ================= export ================= */
+function csvCell(v){
+  if(v === null || v === undefined) return "";
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function toCSV(header, rows){
+  return "\uFEFF" + [header.map(csvCell).join(",")]
+    .concat(rows.map(r=>header.map((_,ci)=>csvCell(r[ci])).join(","))).join("\r\n");
+}
+function baseName(){ return (S.fileName || "dataset").replace(/\.[^.]+$/, ""); }
+function download(name, mime, content){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], {type:mime}));
+  a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 800);
+}
+function wireExports(){
+  $("#dl-clean").addEventListener("click", ()=>{
+    const rows = S.result.keptRows.map(ri=>S.result.cur[ri]);
+    download(baseName()+"_cleaned.csv", "text/csv;charset=utf-8", toCSV(S.header, rows));
+  });
+  $("#dl-json").addEventListener("click", ()=>{
+    const r = S.result;
+    const report = {
+      file:S.fileName, generatedAt:new Date().toISOString(),
+      rowsBefore:r.kpis.rowsBefore, rowsAfter:r.kpis.rowsAfter,
+      kpis:r.kpis, elapsedMs:r.elapsed,
+      rulesUsed:RULES.filter(x=>S.rules[x.id]).map(x=>x.name),
+      log:r.log, standardizationMap:r.mappings,
+      review:r.suggestions.map(p=>({row:p.row+2,column:p.col===null?null:S.header[p.col],rule:p.rule,
+        before:p.before,proposed:p.after,decision:p.decision||{action:"pending"}})),
+      validation:r.validation,demoAccuracy:r.benchmark,
+      drops:r.drops.map(d=>({row:d.row+2, rule:d.rule, reason:d.reason})),
+      columnMovement:S.header.map((h,ci)=>({column:h, type:S.types[ci],
+        cellsChanged:(r.changeLog.filter(c=>c.col===ci)).length,
+        missingBefore:r.beforeStats[ci].missing, missingAfter:r.afterStats[ci].missing,
+        distinctBefore:r.beforeStats[ci].distinct, distinctAfter:r.afterStats[ci].distinct}))
+    };
+    download(baseName()+"_cleaning_report.json", "application/json", JSON.stringify(report, null, 2));
+  });
+  $("#dl-log").addEventListener("click", ()=>{
+    const head = ["rule","column","row","before","after"];
+    const rows = S.result.changeLog.map(c=>[c.rule, S.header[c.col], c.row+2,
+      c.before === null ? "(missing)" : c.before, c.after === null ? "(missing)" : c.after]);
+    download(baseName()+"_issue_log.csv", "text/csv;charset=utf-8", toCSV(head, rows));
+  });
+}
+//EXPORT-EXTRA
+
+/* ================= init & wiring ================= */
+function wire(){
+  const dz = $("#dropzone"), fi = $("#file-input");
+  dz.addEventListener("click", ()=>fi.click());
+  dz.addEventListener("keydown", e=>{ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); fi.click(); } });
+  ["dragenter","dragover"].forEach(ev => dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.add("drag"); }));
+  ["dragleave","drop"].forEach(ev => dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.remove("drag"); }));
+  dz.addEventListener("drop", e=>{ const f = e.dataTransfer.files && e.dataTransfer.files[0]; if(f) readFile(f); });
+  fi.addEventListener("change", e=>{ readFile(e.target.files[0]); e.target.value = ""; });
+  $("#btn-demo").addEventListener("click",()=>{
+    S.uploadRequest=(S.uploadRequest||0)+1;
+    const demo=makeDemo();
+    showMsg("");
+    loadTable("demo_dirty_sales.csv",demo.header,demo.rows,"Built-in retail demo",demo.truth);
+  });
+  $("#btn-reupload").addEventListener("click",()=>fi.click());
+  $("#btn-reclean").addEventListener("click", runPipeline);
+  $("#btn-reset-rules").addEventListener("click", ()=>{
+    RULES.forEach(r => S.rules[r.id] = r.def);
+    runPipeline();
+  });
+  $("#btn-raw").addEventListener("click", ()=>{ S.view = "raw"; S.page = 0;
+    $("#btn-raw").classList.add("on"); $("#btn-clean").classList.remove("on"); renderRows(); });
+  $("#btn-clean").addEventListener("click", ()=>{ S.view = "clean"; S.page = 0;
+    $("#btn-clean").classList.add("on"); $("#btn-raw").classList.remove("on"); renderRows(); });
+  $("#row-search").addEventListener("input", e=>{ S.search = e.target.value; S.page = 0; renderRows(); });
+  $("#pg-prev").addEventListener("click", ()=>{ if(S.page > 0){ S.page--; renderRows(); } });
+  $("#pg-next").addEventListener("click", ()=>{ S.page++; renderRows(); });
+  $("#hist-col").addEventListener("change", e=>{ S.histCol = +e.target.value; chartHist(); });
+  wireExports();
+  wireWorkspace();
+  wireLanding();
+  let timer;
+  window.addEventListener("resize",()=>{
+    clearTimeout(timer);
+    timer=setTimeout(()=>{if(S.panel==="charts") renderCharts();},150);
+  });
+}
+
+
+const reviewedRules = new Set(["typo","xfield","slip"]);
+const fixKey = p => JSON.stringify([p.rule,p.row,p.col,p.before,p.after]);
+const mapKey = (column,from) => JSON.stringify([column,String(from)]);
+const shown = v => isNil(v) ? "Missing" : String(v);
+const ruleTitle = id => RULES.find(r=>r.id===id)?.name || id;
+const numberValue = v => isNil(v) ? NaN : Number(v);
+const table = (columns,body) => '<div class="twrap"><table><thead><tr>'+columns.map(h=>'<th>'+esc(h)+'</th>').join("")+
+  '</tr></thead><tbody>'+body+'</tbody></table></div>';
+
+function openPanel(id){
+  if(!S.result) id="upload";
+  $("#landing").hidden=true;
+  $("#studio-app").hidden=false;
+  const section = document.getElementById(id);
+  if(!section?.matches("section.stage")) return;
+  document.querySelectorAll("section.stage").forEach(el=>{ el.hidden=el!==section; });
+  for(const link of document.querySelectorAll(".chip")){
+    const active = link.hash==="#"+id;
+    link.classList.toggle("active",active);
+    if(active){
+      link.setAttribute("aria-current","page");
+      if(link.parentElement.scrollWidth>link.parentElement.clientWidth){
+        const nav=link.parentElement;
+        const bounds=link.getBoundingClientRect(), visible=nav.getBoundingClientRect();
+        if(bounds.left<visible.left) nav.scrollLeft+=bounds.left-visible.left;
+        if(bounds.right>visible.right) nav.scrollLeft+=bounds.right-visible.right;
+      }
+    }
+    else link.removeAttribute("aria-current");
+  }
+  $("#current-panel").textContent = document.querySelector('.chip[href="#'+id+'"] span').textContent;
+  S.panel=id;
+  if(id==="charts") renderCharts();
+  window.scrollTo({top:0,behavior:"instant"});
+}
+function startDataset(){
+  S.decisions=new Map();
+  S.categoryMappings=new Map();
+  S.dateOrder="auto";
+  S.checks=[];
+  S.reviewPage=0;
+  $("#row-search").value="";
+  $("#btn-raw").classList.add("on");
+  $("#btn-clean").classList.remove("on");
+  $("#review-filter").value="pending";
+  $("#recipe-date").value="auto";
+  $("#recipe-status").textContent=$("#validation-message").textContent="";
+  const options = S.header.map(h=>'<option>'+esc(h)+'</option>').join("");
+  for(const id of ["validation-column","validation-a","validation-b"]) $("#"+id).innerHTML=options;
+}
+function renderReview(){
+  const {suggestions} = S.result, filter = $("#review-filter").value;
+  const pending = suggestions.filter(p=>!p.decision).length;
+  const rejected = suggestions.filter(p=>p.decision?.action==="rejected").length;
+  $("#review-count").textContent=pending ? fmtInt(pending) : "";
+  $("#review-kpis").innerHTML=kpiCard(fmtInt(pending),"Pending review","")+
+    kpiCard(fmtInt(suggestions.length-pending-rejected),"Applied suggestions","")+kpiCard(fmtInt(rejected),"Rejected suggestions","");
+  $("#review-approve").disabled=$("#review-reject").disabled=!pending;
+  const list=suggestions.filter(p=>filter==="all" || filter===(p.decision?.action || "pending"));
+  const size=15, pages=Math.max(1,Math.ceil(list.length/size));
+  S.reviewPage=Math.max(0,Math.min(S.reviewPage,pages-1));
+  $("#review-info").textContent=list.length ? fmtInt(list.length)+" suggestions · Row numbers include the header" : "No suggestions in this view.";
+  $("#review-wrap").hidden=$("#review-pager").hidden=!list.length;
+  $("#review-page").textContent=(S.reviewPage+1)+" of "+pages;
+  $("#review-prev").disabled=S.reviewPage===0;
+  $("#review-next").disabled=S.reviewPage>=pages-1;
+  const button=(id,label,style="ghost")=>'<button type="button" class="btn btn-'+style+' small" data-action="'+id+'">'+label+'</button>';
+  $("#review-body").innerHTML=list.slice(S.reviewPage*size,(S.reviewPage+1)*size).map(p=>{
+    const controls=(p.decision ? button("undo","Undo") : button("accepted","Approve","primary")+button("rejected","Reject"))+
+      (p.col===null ? "" : button("edit","Edit"));
+    const status=p.decision?.action==="rejected" ? "Rejected" : p.decision?.edited ? "Edited" : p.decision ? "Applied" : "Pending";
+    return '<tr data-fix="'+p.index+'"><td>'+(p.row+2)+'</td><td><b>'+esc(p.col===null ? "Remove row" : S.header[p.col])+
+      '</b><br><small class="subtle">'+esc(ruleTitle(p.rule))+'</small></td><td>'+esc(shown(p.before))+'</td><td>'+
+      esc(p.col===null ? "Exclude from output" : shown(p.decision?.edited ? p.decision.value : p.after))+
+      '</td><td><small class="subtle">'+status+'</small><div class="review-actions">'+controls+'</div></td></tr>';
+  }).join("");
+  $("#export-status").textContent=pending ? fmtInt(pending)+" pending suggestions are held back from this export." : "Exports reflect the reviewed data.";
+}
+function setDecision(p,decision){
+  if(decision) S.decisions.set(p.key,decision);
+  else S.decisions.delete(p.key);
+  runPipeline();
+}
+function bulkReview(action){
+  for(const p of S.result.suggestions) if(!p.decision) S.decisions.set(p.key,{action});
+  runPipeline();
+}
+
+function validCheck(v){
+  if(!v || !["required","unique","range","product"].includes(v.kind) || !S.header.includes(v.column)) return false;
+  if(v.kind==="product") return S.header.includes(v.a) && S.header.includes(v.b) && new Set([v.column,v.a,v.b]).size===3;
+  if(v.kind==="range") return (Number.isFinite(v.min) || Number.isFinite(v.max)) &&
+    (v.min===null || Number.isFinite(v.min)) && (v.max===null || Number.isFinite(v.max)) &&
+    (v.min===null || v.max===null || v.min<=v.max);
+  return true;
+}
+function runCheck(v){
+  const {cur,keptRows}=S.result;
+  const col=S.header.indexOf(v.column), a=S.header.indexOf(v.a), b=S.header.indexOf(v.b), seen=new Map(), failures=[];
+  const key=value=>S.types[col]==="numeric" && Number.isFinite(numberValue(value)) ? String(Number(value)) : String(value).trim();
+  if(v.kind==="unique") for(const row of keptRows){
+    const value=cur[row][col];
+    if(!isNil(value)){ const token=key(value); seen.set(token,(seen.get(token)||0)+1); }
+  }
+  for(const row of keptRows){
+    const value=cur[row][col], numeric=numberValue(value);
+    let reason="";
+    if(v.kind==="required" && isNil(value)) reason="Missing required value";
+    if(v.kind==="unique" && !isNil(value) && seen.get(key(value))>1) reason="Value occurs more than once";
+    if(v.kind==="range"){
+      if(!Number.isFinite(numeric)) reason="Missing or invalid number";
+      else if((v.min!==null && numeric<v.min) || (v.max!==null && numeric>v.max)) reason="Outside the allowed range";
+    }
+    if(v.kind==="product"){
+      const expected=Math.round(numberValue(cur[row][a])*numberValue(cur[row][b])*100)/100;
+      if(!Number.isFinite(expected) || !Number.isFinite(numeric)) reason="Missing or invalid number";
+      else if(Math.abs(numeric-expected)>0.010000001) reason="Expected "+expected;
+    }
+    if(reason) failures.push({row:row+2,value,reason});
+  }
+  return {...v,checkedRows:keptRows.length,failures};
+}
+function renderValidation(){
+  const results=S.checks.map(runCheck);
+  S.result.validation=results;
+  $("#validation-results").innerHTML=results.map((v,i)=>{
+    const label=v.kind==="product" ? v.column+" = "+v.a+" × "+v.b :
+      v.kind==="range" ? v.column+" · "+(v.min ?? "Unbounded")+" to "+(v.max ?? "unbounded") :
+      v.column+" · "+(v.kind==="unique" ? "Unique" : "Required");
+    const count=v.failures.length;
+    const details=count ? '<details><summary>Show failed rows</summary>'+
+      table(["Row","Value","Reason"],v.failures.slice(0,50).map(f=>'<tr><td>'+f.row+'</td><td>'+esc(shown(f.value))+
+        '</td><td>'+esc(f.reason)+'</td></tr>').join(""))+
+      (count>50 ? '<p class="subtle">The JSON report includes all failed rows.</p>' : "")+'</details>' : "";
+    return '<div class="rule" style="display:block;margin-top:9px"><div class="actions" style="margin:0"><b>'+
+      esc(label)+'</b><span class="pill '+(count ? "warn" : "fix")+'">'+(count ? fmtInt(count)+" failed" :
+      v.checkedRows ? fmtInt(v.checkedRows)+" passed" : "No rows to check")+
+      '</span><button class="btn btn-ghost small push" type="button" data-remove="'+i+'">Remove</button></div>'+details+'</div>';
+  }).join("") || '<div class="empty">No checks added. Choose a column and add a rule above.</div>';
+}
+
+function exportRecipe(){
+  const mappings=new Map(S.categoryMappings), choices=new Map();
+  for(const p of S.result.suggestions){
+    if(p.rule!=="typo" || !p.decision) continue;
+    const key=mapKey(S.header[p.col],p.before);
+    if(!choices.has(key)) choices.set(key,new Set());
+    choices.get(key).add(p.decision.action==="rejected" ? null : p.decision.edited ? p.decision.value : p.after);
+  }
+  for(const [key,values] of choices){
+    const [value]=values;
+    if(values.size===1 && typeof value==="string" && !isNil(value)) mappings.set(key,value);
+  }
+  const recipe={version:1,dateOrder:S.dateOrder,rules:S.rules,checks:S.checks,
+    types:S.header.map((column,i)=>({column,type:S.types[i]})),
+    categories:[...mappings].map(([key,to])=>{const [column,from]=JSON.parse(key); return {column,from,to};})};
+  download(baseName()+"_recipe.json","application/json",JSON.stringify(recipe,null,2));
+  $("#recipe-status").textContent="Recipe exported.";
+}
+function importRecipe(recipe){
+  if(!recipe || recipe.version!==1 || !["auto","day","month"].includes(recipe.dateOrder) || !recipe.rules ||
+    !Array.isArray(recipe.types) || !Array.isArray(recipe.checks) || !Array.isArray(recipe.categories))
+    throw Error("Choose a version 1 Studio recipe.");
+  const overrides={}, categories=new Map();
+  for(const t of recipe.types){
+    if(t && S.header.includes(t.column) && Object.hasOwn(TYPE_PILL,t.type)) overrides[S.header.indexOf(t.column)]=t.type;
+  }
+  for(const m of recipe.categories){
+    if(m && S.header.includes(m.column) && typeof m.from==="string" && typeof m.to==="string" && !isNil(m.to))
+      categories.set(mapKey(m.column,m.from),m.to);
+  }
+  S.rules=Object.fromEntries(RULES.map(r=>[r.id,typeof recipe.rules[r.id]==="boolean" ? recipe.rules[r.id] : r.def]));
+  S.typeOv=overrides;
+  S.checks=recipe.checks.filter(validCheck);
+  S.categoryMappings=categories;
+  S.dateOrder=$("#recipe-date").value=recipe.dateOrder;
+  S.decisions.clear();
+  runPipeline();
+  $("#recipe-status").textContent="Recipe applied · "+Object.keys(overrides).length+" column types, "+S.checks.length+
+    " checks, and "+categories.size+" mappings matched.";
+}
+
+const currency = new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"});
+const compact = new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:1});
+function bars(items){
+  const max=Math.max(1,...items.map(([,v])=>Math.abs(v)));
+  return '<div class="mini-bars">'+items.map(([name,value])=>'<div class="mini-bar"><span>'+esc(name)+
+    '</span><meter min="0" max="'+max+'" value="'+Math.abs(value)+'" aria-label="'+esc(name)+' revenue magnitude"></meter><b>'+
+    currency.format(value)+'</b></div>').join("")+'</div>';
+}
+function salesTrend(months){
+  if(!months.length) return '<div class="empty">No rows with valid dates and amounts.</div>';
+  const values=months.map(m=>m[1]), min=Math.min(0,...values), max=Math.max(1,...values);
+  const x=i=>months.length===1 ? 341 : 64+555*i/(months.length-1);
+  const y=v=>16+142*(max-v)/(max-min);
+  let axis="";
+  for(let i=0;i<=4;i++){
+    const v=min+(max-min)*i/4, h=y(v);
+    axis+='<path d="M64 '+h+'H619" stroke="#e0e7ef"/><text x="56" y="'+(h+4)+'" text-anchor="end" fill="#52637a" font-size="11">'+compact.format(v)+'</text>';
+  }
+  return '<svg role="img" aria-label="Monthly net revenue" viewBox="0 0 640 188">'+axis+
+    '<polyline fill="none" stroke="#3157df" stroke-width="3" stroke-linejoin="round" points="'+
+    months.map(([,v],i)=>x(i)+","+y(v)).join(" ")+'"/>'+
+    months.map(([month,v],i)=>'<circle cx="'+x(i)+'" cy="'+y(v)+'" r="4" fill="#2448d8"><title>'+esc(month)+" · "+currency.format(v)+
+      '</title></circle>'+(i%Math.max(1,Math.ceil(months.length/6))===0 ? '<text x="'+x(i)+
+      '" y="179" text-anchor="middle" fill="#52637a" font-size="11">'+esc(month)+'</text>' : "")).join("")+'</svg>';
+}
+function renderRetail(){
+  const names=S.header.map(h=>h.toLowerCase().replace(/[^a-z0-9]/g,""));
+  const columns=["date","category","region","unitssold","revenue"].map(n=>names.indexOf(n));
+  if(columns.includes(-1)){
+    $("#retail-note").textContent="The dashboard uses retail columns in the current dataset.";
+    $("#retail-content").innerHTML='<div class="card empty">Load a file with Date, Category, Region, Units_Sold, and Revenue columns, or try the retail demo.</div>';
+    return;
+  }
+  const [date,category,region,units,revenue]=columns;
+  const byMonth=new Map(), byCategory=new Map(), byRegion=new Map();
+  const add=(map,key,value)=>map.set(key,(map.get(key)||0)+value);
+  let net=0, quantity=0, transactions=0, returns=0, omitted=0;
+  for(const i of S.result.keptRows){
+    const row=S.result.cur[i], parsed=parseDate(row[date],S.result.dayFirst[date] ?? (S.dateOrder!=="month"));
+    const q=numberValue(row[units]), r=numberValue(row[revenue]);
+    if(!parsed.valid || !Number.isFinite(q) || !Number.isFinite(r)){ omitted++; continue; }
+    const signed=q<0 ? -Math.abs(r) : r;
+    net+=signed; quantity+=q; transactions++;
+    if(q<0) returns++;
+    add(byMonth,parsed.iso.slice(0,7),signed);
+    add(byCategory,isNil(row[category]) ? "Uncategorized" : String(row[category]),signed);
+    add(byRegion,isNil(row[region]) ? "Unspecified" : String(row[region]),signed);
+  }
+  const ordered=map=>[...map].sort((a,b)=>b[1]-a[1]);
+  const top=map=>ordered(map).slice(0,12);
+  $("#retail-note").textContent="Net revenue subtracts returns. "+fmtInt(omitted)+" retained rows omitted from charts due to invalid dates, quantities, or revenue.";
+  $("#retail-content").innerHTML='<div class="kpis">'+kpiCard(currency.format(net),"Net revenue (USD)","")+
+    kpiCard(fmtInt(transactions),"Plotted transactions","")+kpiCard(fmtInt(quantity),"Net units","")+kpiCard(fmtInt(returns),"Returns included","")+
+    '</div><div class="card retail-trend"><h3>Monthly net revenue</h3>'+salesTrend([...byMonth].sort((a,b)=>a[0].localeCompare(b[0])))+
+    '</div><div class="grid2"><div class="card"><h3>Revenue by category</h3>'+bars(top(byCategory))+
+    '</div><div class="card"><h3>Revenue by region</h3>'+bars(top(byRegion))+'</div></div>';
+}
+function renderBenchmark(){
+  const box=$("#benchmark");
+  box.hidden=!S.truth;
+  S.result.benchmark=null;
+  if(!S.truth) return;
+  const score={corruptedCells:0,recovered:0,unresolved:0,validCellsChanged:0,originalRowsRemoved:0,duplicatesRemoved:0,totalDuplicates:S.rawRows.length-S.truth.length};
+  const comparable=(v,col)=>{
+    if(isNil(v)) return null;
+    return col===1 ? parseDate(v,true).iso || String(v) : String(v);
+  };
+  S.truth.forEach((expected,i)=>{
+    if(!S.result.kept[i]) score.originalRowsRemoved++;
+    expected.forEach((v,col)=>{
+      const target=comparable(v,col), raw=comparable(S.rawRows[i][col],col), cleaned=comparable(S.result.cur[i][col],col);
+      if(raw!==target){
+        score.corruptedCells++;
+        if(S.result.kept[i] && cleaned===target) score.recovered++;
+        else score.unresolved++;
+      }else if(S.result.kept[i] && cleaned!==target) score.validCellsChanged++;
+    });
+  });
+  for(let i=S.truth.length;i<S.rawRows.length;i++) if(!S.result.kept[i]) score.duplicatesRemoved++;
+  S.result.benchmark=score;
+  box.innerHTML='<h3>Demo accuracy against known clean data</h3><p class="subtle">Corrupted cells in removed original rows count as unresolved.</p><div class="kpis">'+
+    kpiCard(score.recovered+" / "+score.corruptedCells,"Corrupted cells recovered","")+kpiCard(score.unresolved,"Unresolved cells","")+
+    kpiCard(score.validCellsChanged,"Valid cells changed","")+kpiCard(score.originalRowsRemoved,"Original rows removed","")+
+    kpiCard(score.duplicatesRemoved+" / "+score.totalDuplicates,"Injected duplicates removed","")+'</div>';
+}
+
+function wireWorkspace(){
+  document.querySelectorAll(".chip").forEach(link=>link.addEventListener("click",e=>{e.preventDefault();openPanel(link.hash.slice(1));}));
+  $("#top-upload").addEventListener("click",()=>$("#file-input").click());
+  $("#top-export").addEventListener("click",()=>openPanel("export"));
+  $("#review-filter").addEventListener("change",()=>{S.reviewPage=0;renderReview();});
+  $("#review-prev").addEventListener("click",()=>{S.reviewPage--;renderReview();});
+  $("#review-next").addEventListener("click",()=>{S.reviewPage++;renderReview();});
+  $("#review-approve").addEventListener("click",()=>bulkReview("accepted"));
+  $("#review-reject").addEventListener("click",()=>bulkReview("rejected"));
+  $("#review-body").addEventListener("click",e=>{
+    const button=e.target.closest("[data-action]");
+    if(!button) return;
+    const p=S.result.suggestions[Number(button.closest("tr").dataset.fix)], action=button.dataset.action;
+    if(action==="undo"){setDecision(p,null);return;}
+    if(action!=="edit"){setDecision(p,{action});return;}
+    S.editing=p;
+    $("#edit-context").textContent="Row "+(p.row+2)+" · "+S.header[p.col];
+    $("#edit-value").value=(p.decision?.edited ? p.decision.value : p.after) ?? "";
+    $("#edit-error").textContent="";
+    $("#edit-review").showModal();
+  });
+  $("#edit-cancel").addEventListener("click",()=>$("#edit-review").close());
+  $("#edit-form").addEventListener("submit",e=>{
+    e.preventDefault();
+    const p=S.editing, input=$("#edit-value").value.trim();
+    let value=input || null;
+    if(value!==null && S.types[p.col]==="numeric"){
+      value=Number(value);
+      if(!Number.isFinite(value)){ $("#edit-error").textContent="Enter a valid number.";return; }
+    }
+    setDecision(p,{action:"accepted",edited:true,value});
+    $("#edit-review").close();
+  });
+  $("#validation-kind").addEventListener("change",e=>{
+    for(const id of ["v-a","v-b"]) $("#"+id).hidden=e.target.value!=="product";
+    for(const id of ["v-min","v-max"]) $("#"+id).hidden=e.target.value!=="range";
+  });
+  $("#validation-form").addEventListener("submit",e=>{
+    e.preventDefault();
+    const v={kind:$("#validation-kind").value,column:$("#validation-column").value};
+    if(v.kind==="product") Object.assign(v,{a:$("#validation-a").value,b:$("#validation-b").value});
+    if(v.kind==="range"){
+      const min=$("#validation-min").valueAsNumber,max=$("#validation-max").valueAsNumber;
+      Object.assign(v,{min:Number.isNaN(min)?null:min,max:Number.isNaN(max)?null:max});
+    }
+    if(!validCheck(v)){
+      $("#validation-message").textContent=v.kind==="product" ? "Choose three distinct columns." : "Enter at least one bound and keep minimum at or below maximum.";
+      return;
+    }
+    S.checks.push(v);renderValidation();
+    $("#validation-message").textContent="Validation check added.";
+  });
+  $("#validation-results").addEventListener("click",e=>{
+    const button=e.target.closest("[data-remove]");
+    if(!button) return;
+    S.checks.splice(Number(button.dataset.remove),1);renderValidation();
+    $("#validation-message").textContent="Validation check removed.";
+  });
+  $("#recipe-date").addEventListener("change",e=>{S.dateOrder=e.target.value;runPipeline();});
+  $("#recipe-save").addEventListener("click",exportRecipe);
+  $("#recipe-load").addEventListener("click",()=>$("#recipe-file").click());
+  $("#recipe-file").addEventListener("change",async e=>{
+    const file=e.target.files[0], dataset=S.rawRows;
+    e.target.value="";
+    if(!file) return;
+    try{
+      if(file.size>2*1024*1024) throw Error("Recipe exceeds 2 MB.");
+      const recipe=JSON.parse(await file.text());
+      if(S.rawRows===dataset) importRecipe(recipe);
+    }catch(error){ $("#recipe-status").textContent="Could not import recipe. "+error.message; }
+  });
+}
+
+function wireLanding(){
+  $(".brand").addEventListener("click",event=>{
+    event.preventDefault();
+    $("#studio-app").hidden=true;
+    $("#landing").hidden=false;
+    window.scrollTo({top:0,behavior:"instant"});
+    $(".studio-wordmark").focus();
+  });
+  document.querySelectorAll("[data-workspace]").forEach(button=>button.addEventListener("click",()=>{
+    openPanel(button.dataset.workspace || S.panel || "upload");
+    focusPanelHeading();
+  }));
+  $("#landing-demo").addEventListener("click",()=>{
+    $("#btn-demo").click();
+    focusPanelHeading();
+  });
+
+  const {header,rows}=makeDemo();
+  const types=profile(header,rows).map(column=>column.type);
+  const rules=Object.fromEntries(RULES.map(rule=>[rule.id,rule.def]));
+  const {suggestions}=clean(header,rows,types,rules,{decisions:new Map(),categoryMappings:new Map(),dateOrder:"auto"});
+  const picks=new Map();
+  for(const suggestion of suggestions){
+    if(suggestion.col!==null && !picks.has(suggestion.col)) picks.set(suggestion.col,suggestion);
+    if(picks.size===3) break;
+  }
+  $("#preview-rows").textContent=fmtInt(rows.length);
+  $("#preview-count").textContent=fmtInt(suggestions.length);
+  const renderPreview=original=>{
+    $("#preview-original").setAttribute("aria-pressed",String(original));
+    $("#preview-proposed").setAttribute("aria-pressed",String(!original));
+    $(".preview-table").toggleAttribute("data-original",original);
+    $("#preview-value-label").textContent=original ? "Original value" : "Proposed value";
+    $("#preview-body").innerHTML=[...picks.values()].map(p=>"<tr><td>"+(p.row+2)+"</td><td>"+
+      esc(header[p.col].replaceAll("_"," "))+"</td><td><span>"+esc(shown(original ? p.before : p.after))+"</span></td></tr>").join("");
+  };
+  $("#preview-original").addEventListener("click",()=>renderPreview(true));
+  $("#preview-proposed").addEventListener("click",()=>renderPreview(false));
+  renderPreview(false);
+}
+function focusPanelHeading(){
+  const heading=document.querySelector("section.stage:not([hidden]) .stage-head :is(h1,h2)");
+  if(heading){
+    heading.tabIndex=-1;
+    heading.classList.add("focus-target");
+    heading.focus({preventScroll:true});
+  }
+}
+
+wire();
+</script>
+</body>
+</html>
